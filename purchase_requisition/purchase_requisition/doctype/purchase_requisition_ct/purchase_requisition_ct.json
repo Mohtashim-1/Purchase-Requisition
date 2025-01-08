@@ -7,17 +7,20 @@
  "engine": "InnoDB",
  "field_order": [
   "item_code",
-  "name1",
-  "group",
-  "uom",
   "qty",
+  "column_break_rjze",
+  "name1",
   "last_purchase_rate",
+  "column_break_etrc",
+  "group",
   "last_purchased_vendor",
+  "column_break_owom",
+  "uom",
   "schedule_date"
  ],
  "fields": [
   {
-   "fetch_from": "item.item_code",
+   "fetch_from": "item_code.item_name",
    "fieldname": "name1",
    "fieldtype": "Data",
    "label": "Name"
@@ -31,13 +34,13 @@
    "label": "Qty"
   },
   {
-   "fetch_from": "item.item_group",
+   "fetch_from": "item_code.item_group",
    "fieldname": "group",
    "fieldtype": "Data",
    "label": "Group"
   },
   {
-   "fetch_from": "item.stock_uom",
+   "fetch_from": "item_code.stock_uom",
    "fieldname": "uom",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -70,12 +73,24 @@
    "fieldname": "schedule_date",
    "fieldtype": "Date",
    "label": "Schedule Date"
+  },
+  {
+   "fieldname": "column_break_rjze",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_etrc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_owom",
+   "fieldtype": "Column Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-01-08 22:56:24.273762",
+ "modified": "2025-01-08 23:32:48.888893",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition CT",

@@ -4,6 +4,12 @@ from frappe.model.document import Document
 class PurchaseRequisition(Document):
     def validate(self):
         self.last_purchase_rate()
+        self.schedule_date()
+    
+    def schedule_date(self):
+        delivery = self.delivery_date
+        for i in self.purchase_requisition_ct:
+            i.schedule_date = delivery
     
     def last_purchase_rate(self):
         frappe.msgprint('c')
