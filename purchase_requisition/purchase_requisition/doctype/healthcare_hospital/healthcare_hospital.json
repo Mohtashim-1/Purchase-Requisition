@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:hospital_name",
+ "creation": "2025-01-09 00:18:57.984695",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "disable",
+  "hospital_name",
+  "column_break_jprt",
+  "hospital_address",
+  "hospital_contact"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "disable",
+   "fieldtype": "Check",
+   "label": "Disable"
+  },
+  {
+   "fieldname": "hospital_name",
+   "fieldtype": "Data",
+   "label": "Hospital Name",
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_jprt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "hospital_address",
+   "fieldtype": "Data",
+   "label": "Hospital Address"
+  },
+  {
+   "fieldname": "hospital_contact",
+   "fieldtype": "Data",
+   "label": "Hospital Contact"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-01-09 00:20:07.618920",
+ "modified_by": "Administrator",
+ "module": "Purchase Requisition",
+ "name": "Healthcare Hospital",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "track_seen": 1,
+ "track_views": 1
+}

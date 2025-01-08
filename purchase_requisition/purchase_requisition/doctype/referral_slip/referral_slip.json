@@ -1,0 +1,273 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:RS-{MM}-{YY}-{####}",
+ "creation": "2025-01-08 23:49:48.206062",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "posting_date_and_time",
+  "column_break_varf",
+  "referral_slip",
+  "section_break_hvtx",
+  "patient",
+  "column_break_qxso",
+  "age",
+  "column_break_arbv",
+  "gender",
+  "column_break_bfna",
+  "date_of_birth",
+  "section_break_dvlg",
+  "complaint",
+  "column_break_tihk",
+  "diagnosis",
+  "refer_details_section",
+  "refer_from",
+  "column_break_btdo",
+  "refer_to",
+  "column_break_zank",
+  "speciality",
+  "section_break_vqjr",
+  "approved_amount",
+  "column_break_zldt",
+  "approved_day",
+  "column_break_wcrr",
+  "ward_type",
+  "hospital_details_section",
+  "hospital",
+  "column_break_htch",
+  "address",
+  "column_break_qvrx",
+  "contact",
+  "section_break_2xg3",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_2xg3",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Referral Slip",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "posting_date_and_time",
+   "fieldtype": "Datetime",
+   "label": "Posting Date and Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_hvtx",
+   "fieldtype": "Section Break",
+   "label": "Patient Information"
+  },
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Patient",
+   "options": "Patient",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "patient.sex",
+   "fieldname": "gender",
+   "fieldtype": "Data",
+   "label": "Gender"
+  },
+  {
+   "fetch_from": "patient.dob",
+   "fieldname": "date_of_birth",
+   "fieldtype": "Data",
+   "label": "Date of Birth"
+  },
+  {
+   "fieldname": "column_break_qxso",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "age",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Age",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_arbv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_bfna",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_dvlg",
+   "fieldtype": "Section Break",
+   "label": "Complain/Diagnostic"
+  },
+  {
+   "fieldname": "complaint",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Complaint",
+   "options": "Complaint",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_tihk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "diagnosis",
+   "fieldtype": "Link",
+   "label": "Diagnosis",
+   "options": "Diagnosis"
+  },
+  {
+   "fieldname": "refer_details_section",
+   "fieldtype": "Section Break",
+   "label": "Refer Details"
+  },
+  {
+   "fieldname": "refer_from",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Refer From",
+   "options": "Healthcare Practitioner",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_btdo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "refer_to",
+   "fieldtype": "Data",
+   "label": "Refer To"
+  },
+  {
+   "fieldname": "section_break_vqjr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "approved_amount",
+   "fieldtype": "Float",
+   "label": "Approved Amount"
+  },
+  {
+   "fieldname": "column_break_zldt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "approved_day",
+   "fieldtype": "Select",
+   "label": "Approved Day",
+   "options": "\n1\n2\n3"
+  },
+  {
+   "fieldname": "column_break_wcrr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "General",
+   "fieldname": "ward_type",
+   "fieldtype": "Select",
+   "label": "Ward Type",
+   "options": "\nGeneral\nSemi Private\nPrivate"
+  },
+  {
+   "fieldname": "column_break_zank",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "speciality",
+   "fieldtype": "Link",
+   "label": "Speciality",
+   "options": "Healthcare Speciality"
+  },
+  {
+   "fieldname": "hospital_details_section",
+   "fieldtype": "Section Break",
+   "label": "Hospital Details"
+  },
+  {
+   "fieldname": "hospital",
+   "fieldtype": "Link",
+   "label": "Hospital",
+   "link_filters": "[[\"Healthcare Hospital\",\"disable\",\"=\",0]]",
+   "options": "Healthcare Hospital",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "hospital.hospital_address",
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Address"
+  },
+  {
+   "fetch_from": "hospital.hospital_contact",
+   "fieldname": "contact",
+   "fieldtype": "Data",
+   "label": "Contact"
+  },
+  {
+   "fieldname": "column_break_htch",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_qvrx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_varf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "OPD",
+   "fieldname": "referral_slip",
+   "fieldtype": "Select",
+   "label": "Referral Slip",
+   "options": "OPD\nAdmission\nAmount Approval",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-01-09 00:24:00.646600",
+ "modified_by": "Administrator",
+ "module": "Purchase Requisition",
+ "name": "Referral Slip",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "track_seen": 1,
+ "track_views": 1
+}
