@@ -46,3 +46,27 @@ def get_data(mr_name):
     """, (mr_name,), as_dict=True)
 
     return items
+
+
+
+@frappe.whitelist()
+def make_purchase_order(purchase_requisition_name, supplier):
+    # Get the Purchase Requisition document
+    purchase_requisition = frappe.get_doc("Purchase Requisition", purchase_requisition_name)
+    
+    # Create a new Purchase Order document
+    purchase_order = frappe.new_doc("Purchase Order")
+    purchase_order.supplier = supplier
+    purchase_order.schedule_date = purchase_requisition.delivery_date
+    
+    # Map items from Purchase Requisition child table to Purchase Order
+    for item in purchase_requisition.purchase_requisition_ct:  # Assuming 'purchase_requisition_ct' is the child table name in Purchase Requisition
+        purchase_order.append("items", {
+            "item_code": item.item_code,
+            "qty": item.qty,
+            "schedule_date": item.schedule_date  
+        })
+    
+    # Save and return the newly created document
+    purchase_order.insert()
+    return purchase_order.name

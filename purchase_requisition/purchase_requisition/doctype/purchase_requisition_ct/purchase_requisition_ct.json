@@ -12,7 +12,8 @@
   "uom",
   "qty",
   "last_purchase_rate",
-  "last_purchased_vendor"
+  "last_purchased_vendor",
+  "schedule_date"
  ],
  "fields": [
   {
@@ -64,12 +65,17 @@
    "fieldname": "last_purchased_vendor",
    "fieldtype": "Data",
    "label": "Last Purchased Vendor"
+  },
+  {
+   "fieldname": "schedule_date",
+   "fieldtype": "Date",
+   "label": "Schedule Date"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2024-11-28 16:19:10.737609",
+ "modified": "2025-01-08 22:56:24.273762",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition CT",

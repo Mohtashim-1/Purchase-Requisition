@@ -6,6 +6,13 @@
  "engine": "InnoDB",
  "field_order": [
   "posting_datetime",
+  "column_break_rqds",
+  "date",
+  "column_break_gczz",
+  "time",
+  "column_break_snur",
+  "delivery_date",
+  "item_section",
   "purchase_requisition_ct",
   "section_break_bgn5",
   "amended_from"
@@ -26,21 +33,58 @@
    "search_index": 1
   },
   {
+   "default": "Now",
    "fieldname": "posting_datetime",
    "fieldtype": "Datetime",
-   "label": "Posting Datetime"
+   "label": "Posting Datetime",
+   "read_only": 1
   },
   {
    "fieldname": "purchase_requisition_ct",
    "fieldtype": "Table",
    "label": "Purchase Requisition CT",
    "options": "Purchase Requisition CT"
+  },
+  {
+   "default": "Today",
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "label": "Delivery Date"
+  },
+  {
+   "fieldname": "column_break_rqds",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "column_break_gczz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Now",
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "label": "Time"
+  },
+  {
+   "fieldname": "column_break_snur",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_section",
+   "fieldtype": "Section Break",
+   "label": "Item"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2024-11-28 16:59:51.819443",
+ "modified": "2025-01-08 22:54:01.754715",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition",
