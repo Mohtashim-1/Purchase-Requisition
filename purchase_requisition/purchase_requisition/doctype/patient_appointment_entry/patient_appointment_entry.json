@@ -6,17 +6,30 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "posting_date",
+  "column_break_cmlc",
+  "company",
+  "section_break_byhy",
   "patient",
+  "patient_name",
+  "status",
+  "column_break_alhm",
+  "gender",
+  "date_of_birth",
+  "age",
+  "section_break_cftl",
   "practitioner",
   "appointment_time",
-  "company",
   "column_break_qjuu",
-  "patient_name",
   "practitioner__name",
-  "posting_date",
   "column_break_ctzq",
-  "gender",
+  "medical_department",
+  "column_break_izxl",
   "time",
+  "section_break_gtim",
+  "mode_of_payment",
+  "billing_item",
+  "column_break_kurn",
   "paid_amount",
   "section_break_7dod",
   "amended_from"
@@ -78,7 +91,7 @@
    "default": "Now",
    "fieldname": "appointment_time",
    "fieldtype": "Datetime",
-   "label": "Appointment Time"
+   "label": "Appointment Date & Time"
   },
   {
    "default": "Today",
@@ -105,12 +118,77 @@
    "fieldtype": "Link",
    "label": "Company",
    "options": "Company"
+  },
+  {
+   "fieldname": "column_break_izxl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "patient.dob",
+   "fieldname": "date_of_birth",
+   "fieldtype": "Data",
+   "label": "Date Of Birth"
+  },
+  {
+   "fetch_from": "practitioner.department",
+   "fieldname": "medical_department",
+   "fieldtype": "Data",
+   "label": "Medical Department"
+  },
+  {
+   "fieldname": "age",
+   "fieldtype": "Data",
+   "label": "Age"
+  },
+  {
+   "fieldname": "column_break_alhm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_cftl",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nPaid\nZ Account\nS Account\nE Account"
+  },
+  {
+   "default": "Cash",
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Mode of Payment",
+   "options": "Mode of Payment"
+  },
+  {
+   "fieldname": "billing_item",
+   "fieldtype": "Link",
+   "label": "Billing Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "section_break_gtim",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_kurn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_cmlc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_byhy",
+   "fieldtype": "Section Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-22 02:55:59.483497",
+ "modified": "2025-01-22 03:42:18.419197",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Patient Appointment Entry",
