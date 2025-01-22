@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:PAE-{YYYY}-{MM}-{DD}-{#####}",
+ "autoname": "format:PAE-{#####}",
  "creation": "2025-01-22 02:41:21.300805",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -29,8 +29,12 @@
   "section_break_gtim",
   "mode_of_payment",
   "billing_item",
+  "invoiced",
+  "base_grand_total",
+  "advance_paid",
   "column_break_kurn",
   "paid_amount",
+  "invoice_no",
   "section_break_7dod",
   "amended_from"
  ],
@@ -166,7 +170,8 @@
    "fieldname": "billing_item",
    "fieldtype": "Link",
    "label": "Billing Item",
-   "options": "Item"
+   "options": "Item",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_gtim",
@@ -183,12 +188,35 @@
   {
    "fieldname": "section_break_byhy",
    "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "invoiced",
+   "fieldtype": "Check",
+   "label": "Invoiced",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_no",
+   "fieldtype": "Data",
+   "label": "Invoice No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_grand_total",
+   "fieldtype": "Currency",
+   "label": "Base Grand Total"
+  },
+  {
+   "fieldname": "advance_paid",
+   "fieldtype": "Currency",
+   "label": "Advance Paid"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-22 03:42:18.419197",
+ "modified": "2025-01-22 05:36:02.397986",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Patient Appointment Entry",
