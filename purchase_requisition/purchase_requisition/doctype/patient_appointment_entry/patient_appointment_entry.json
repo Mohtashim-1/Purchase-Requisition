@@ -1,17 +1,20 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:PAE-{#####}",
+ "autoname": "naming_series:{naming_series}",
  "creation": "2025-01-22 02:41:21.300805",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "posting_date",
+  "naming_series",
   "column_break_cmlc",
   "company",
   "section_break_byhy",
   "patient",
   "patient_name",
+  "customer",
+  "customer_id",
   "status",
   "column_break_alhm",
   "gender",
@@ -34,9 +37,9 @@
   "advance_paid",
   "column_break_kurn",
   "paid_amount",
-  "invoice_no",
   "section_break_7dod",
-  "amended_from"
+  "amended_from",
+  "invoice"
  ],
  "fields": [
   {
@@ -56,8 +59,14 @@
   {
    "fieldname": "patient",
    "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Patient",
-   "options": "Patient"
+   "options": "Patient",
+   "reqd": 1
   },
   {
    "fetch_from": "patient.patient_name",
@@ -74,8 +83,14 @@
   {
    "fieldname": "practitioner",
    "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Practitioner ",
-   "options": "Healthcare Practitioner"
+   "options": "Healthcare Practitioner",
+   "reqd": 1
   },
   {
    "fetch_from": "practitioner.practitioner_name",
@@ -95,12 +110,18 @@
    "default": "Now",
    "fieldname": "appointment_time",
    "fieldtype": "Datetime",
-   "label": "Appointment Date & Time"
+   "label": "Appointment Date & Time",
+   "reqd": 1
   },
   {
    "default": "Today",
    "fieldname": "posting_date",
-   "fieldtype": "Data",
+   "fieldtype": "Date",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Posting Date",
    "read_only": 1
   },
@@ -115,13 +136,15 @@
    "fieldname": "paid_amount",
    "fieldtype": "Float",
    "label": "Paid Amount",
+   "reqd": 1,
    "set_only_once": 1
   },
   {
    "fieldname": "company",
    "fieldtype": "Link",
    "label": "Company",
-   "options": "Company"
+   "options": "Company",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_izxl",
@@ -156,6 +179,11 @@
    "default": "Open",
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Status",
    "options": "Open\nPaid\nZ Account\nS Account\nE Account"
   },
@@ -163,12 +191,22 @@
    "default": "Cash",
    "fieldname": "mode_of_payment",
    "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Mode of Payment",
    "options": "Mode of Payment"
   },
   {
    "fieldname": "billing_item",
    "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
    "label": "Billing Item",
    "options": "Item",
    "read_only": 1
@@ -197,12 +235,6 @@
    "read_only": 1
   },
   {
-   "fieldname": "invoice_no",
-   "fieldtype": "Data",
-   "label": "Invoice No",
-   "read_only": 1
-  },
-  {
    "fieldname": "base_grand_total",
    "fieldtype": "Currency",
    "label": "Base Grand Total"
@@ -211,16 +243,39 @@
    "fieldname": "advance_paid",
    "fieldtype": "Currency",
    "label": "Advance Paid"
+  },
+  {
+   "fetch_from": "patient.customer",
+   "fieldname": "customer",
+   "fieldtype": "Data",
+   "label": "Customer"
+  },
+  {
+   "fieldname": "customer_id",
+   "fieldtype": "Data",
+   "label": "Customer ID"
+  },
+  {
+   "fieldname": "invoice",
+   "fieldtype": "Data",
+   "label": "Invoice"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "label": "Series",
+   "options": "Token-.YYYY.-.MM.-.DD.-.{practitioner__name}.-",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-22 05:36:02.397986",
+ "modified": "2025-02-03 17:15:39.673926",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Patient Appointment Entry",
- "naming_rule": "Expression",
+ "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {

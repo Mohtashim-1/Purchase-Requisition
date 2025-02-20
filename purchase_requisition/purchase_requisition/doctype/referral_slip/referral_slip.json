@@ -13,6 +13,8 @@
   "referral_slip",
   "section_break_hvtx",
   "patient",
+  "column_break_7kb1q",
+  "patient_name",
   "column_break_qxso",
   "age",
   "column_break_arbv",
@@ -25,10 +27,13 @@
   "diagnosis",
   "refer_details_section",
   "refer_from",
+  "column_break_t5eko",
+  "doctor",
+  "column_break_9bz7v",
+  "speciality",
   "opd_section",
   "refer_to",
   "column_break_xbip",
-  "speciality",
   "amount_approval_section",
   "approved_amount",
   "admission_section",
@@ -120,8 +125,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Complaint",
-   "options": "Complaint",
-   "reqd": 1
+   "options": "Complaint"
   },
   {
    "fieldname": "column_break_tihk",
@@ -183,7 +187,6 @@
    "fieldname": "hospital",
    "fieldtype": "Link",
    "label": "Hospital",
-   "link_filters": "[[\"Healthcare Hospital\",\"disable\",\"=\",0]]",
    "options": "Healthcare Hospital",
    "reqd": 1
   },
@@ -254,12 +257,36 @@
   {
    "fieldname": "column_break_twoy",
    "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "refer_from.practitioner_name",
+   "fieldname": "doctor",
+   "fieldtype": "Data",
+   "label": "Doctor "
+  },
+  {
+   "fieldname": "column_break_t5eko",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_7kb1q",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "patient.patient_name",
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name"
+  },
+  {
+   "fieldname": "column_break_9bz7v",
+   "fieldtype": "Column Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-09 00:47:25.985537",
+ "modified": "2025-01-18 18:04:14.072338",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Referral Slip",

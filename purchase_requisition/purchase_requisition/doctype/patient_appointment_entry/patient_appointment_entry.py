@@ -4,16 +4,22 @@
 import frappe
 from frappe.model.document import Document
 from datetime import datetime
+from datetime import datetime, timedelta
+
 
 
 class PatientAppointmentEntry(Document):
 	def validate(self):
 		self.get_user_default_company()
+		# self.get_customer_id()
 		# self.calculate_age()
 		# self.create_payment_entry()
 
 	def on_submit(self):
 		self.create_payment_entry()
+	
+	# def get_customer_id(self):
+	# 	cust_id = frappe.get_doc("Customer",)
 		
 	def get_user_default_company(self):
 		default_company = frappe.defaults.get_user_default("Company")
@@ -46,43 +52,68 @@ class PatientAppointmentEntry(Document):
 	def create_payment_entry(self):
 		if self.paid_amount > 0:
 			try:
-				# Step 1: Create Sales Invoice
-				sales_invoice = frappe.new_doc("Sales Invoice")
-				sales_invoice.customer = self.patient
-				sales_invoice.company = self.company
-				sales_invoice.due_date = self.posting_date
+				# Step 1: Validate Customer Exists
+				customer_id = frappe.db.get_value("Customer", {"customer_name": self.patient_name}, "name")
 
-				# Create items and add them to the Sales Invoice
+				if not customer_id:
+					frappe.throw(f"Customer {self.patient_name} does not exist.")
+
+				# Step 2: Create Sales Invoice
+				sales_invoice = frappe.new_doc("Sales Invoice")
+				sales_invoice.customer = customer_id  # Use fetched Customer ID
+				sales_invoice.company = self.company
+				sales_invoice.due_date = (datetime.strptime(self.posting_date, "%Y-%m-%d") + timedelta(days=1)).date()
+
+				# Fetch payment terms template, if available
+				payment_terms_template = frappe.db.get_value("Customer", {"name": customer_id}, "payment_terms")
+				if payment_terms_template:
+					sales_invoice.payment_terms_template = payment_terms_template
+
+				# Add items to the Sales Invoice
 				item = sales_invoice.append("items", {})
-				item.item_name = "Consultation Fee"  # Adjust as needed
+				item.item_name = "Consultation Fee"
 				item.description = "Consultation Fee for Patient Appointment"
 				item.qty = 1
 				item.rate = self.paid_amount
 				item.amount = self.paid_amount
 
-				# Set the Income Account manually (use the default income account for the company)
+				# Set Income Account
 				company = frappe.get_doc("Company", self.company)
 				if company.default_income_account:
 					item.income_account = company.default_income_account
 				else:
 					frappe.throw("No default Income Account found for the company.")
 
-				sales_invoice.insert()  # Insert the Sales Invoice document
-				sales_invoice.submit()  # Submit the Sales Invoice
+				# Retrieve the cost center from the company's settings
+				if company.cost_center:
+					item.cost_center = company.cost_center
+				else:
+					frappe.throw("No default Cost Center found for the company.")
+
+				# Insert and submit Sales Invoice
+				sales_invoice.insert()
+				sales_invoice.submit()
+
+				# Save the Sales Invoice number after submission
+				self.invoice = sales_invoice.name
+
+				# self.save()
+
+				frappe.db.commit()  # Commit to the database after submission
 				frappe.msgprint(f"Sales Invoice {sales_invoice.name} created and submitted.")
 
-				# Step 2: Create Payment Entry for Sales Invoice
+				# Step 3: Create Payment Entry
 				pe = frappe.new_doc("Payment Entry")
 				pe.payment_type = "Receive"
 				pe.posting_date = self.posting_date
 				pe.party_type = "Customer"
-				pe.party = self.patient
+				pe.party = customer_id  # Use fetched Customer ID
 				pe.company = self.company
 				pe.paid_amount = self.paid_amount
 				pe.received_amount = self.paid_amount
 				pe.reference_no = self.name
 				pe.reference_date = self.posting_date
-				pe.mode_of_payment = "Cash"  # Change to appropriate mode of payment
+				pe.mode_of_payment = "Cash"  # Adjust as needed
 
 				# Add reference to the Sales Invoice in Payment Entry
 				reference_row = pe.append("references", {})
@@ -93,7 +124,7 @@ class PatientAppointmentEntry(Document):
 				reference_row.outstanding_amount = sales_invoice.outstanding_amount
 				reference_row.allocated_amount = self.paid_amount
 
-				# Get the default cash account for the company
+				# Get Default Cash Account
 				if company.default_cash_account:
 					pe.paid_to = company.default_cash_account
 					paid_to_account = frappe.get_doc("Account", company.default_cash_account)
@@ -101,17 +132,20 @@ class PatientAppointmentEntry(Document):
 				else:
 					frappe.throw("Default Cash Account is not set for the company.")
 
+				# Insert and submit Payment Entry
 				pe.insert()
 				pe.submit()
+
+				# Save the Payment Entry number after submission
+				# self.payment_voucher = pe.name
+
+				frappe.db.commit()  # Commit to the database after submission
 				frappe.msgprint(f"Payment Entry {pe.name} created and submitted.")
+
+			except frappe.DoesNotExistError as e:
+				frappe.throw(f"Missing Data: {str(e)}")
+			except frappe.ValidationError as e:
+				frappe.throw(f"Validation Error: {str(e)}")
 			except Exception as e:
-				frappe.log_error(message=f"Error creating Payment Entry for {self.name}: {str(e)}", title="Payment Entry Error")
+				frappe.log_error(f"Error creating Sales Invoice and Payment Entry for {self.name}: {str(e)}", "Payment Entry Error")
 				frappe.throw(f"An unexpected error occurred: {str(e)}")
-
-
-
-
-
-
-	
-	
