@@ -17,9 +17,12 @@ frappe.ui.form.on('Purchase Order', {
                             method: "purchase_requisition.purchase_requisition.doctype.purchase_requisition.purchase_requisition.get_pr_items",
                             args: { pr_name: values.pr_name },  
                             callback: function (r) {
-                                console.log(r.message);  
+                                console.log("Fetched PR Items:", r.message);  
 
                                 if (r.message && r.message.length > 0) {
+                                    // **Clear Existing Rows Before Adding**
+                                    frm.clear_table("items");
+
                                     r.message.forEach(item => {
                                         let child_row = frm.add_child('items');  
                                         child_row.item_code = item.item_code;
@@ -31,9 +34,10 @@ frappe.ui.form.on('Purchase Order', {
                                         child_row.warehouse = item.target_warehouse;
                                         child_row.custom_purchase_requisition = values.pr_name; 
                                         child_row.custom_purchase_requisition_item = item.name;  
-
-                                        frm.refresh_field('items');
                                     });
+
+                                    // **Refresh the table once after adding all rows**
+                                    frm.refresh_field('items');
                                 }
                             }
                         });
