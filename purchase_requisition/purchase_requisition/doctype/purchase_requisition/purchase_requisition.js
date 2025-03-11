@@ -26,7 +26,8 @@ frappe.ui.form.on('Purchase Requisition', {
                                     let child_row = frm.add_child('purchase_requisition_ct');  // Assuming 'items' is your child table fieldname
                                     child_row.item_code = item.item_code;
                                     child_row.qty = item.qty;
-                                    child_row.uom = item.uom;  // Add other fields as necessary
+                                    child_row.uom = item.uom;
+                                    child_row.material_request = values.mr_name;  
                                     // child_row.rate = item.rate;  // Add fields like rate, amount, etc.
 
                                     // Refresh the child table

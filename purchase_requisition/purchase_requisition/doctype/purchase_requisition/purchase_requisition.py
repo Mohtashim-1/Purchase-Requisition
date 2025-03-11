@@ -12,7 +12,7 @@ class PurchaseRequisition(Document):
             i.schedule_date = delivery
     
     def last_purchase_rate(self):
-        frappe.msgprint('c')
+        # frappe.msgprint('c')
         for i in self.purchase_requisition_ct:
             # Ensure that the query is properly parameterized
             rate = frappe.db.sql("""
@@ -24,7 +24,7 @@ class PurchaseRequisition(Document):
                 LIMIT 1
             """, (i.item_code,), as_dict=True)
             
-            frappe.msgprint(f'Fetched rate: {rate}')
+            # frappe.msgprint(f'Fetched rate: {rate}')
             
             # Check if a result is returned
             if rate:
@@ -46,7 +46,7 @@ class PurchaseRequisition(Document):
 def get_data(mr_name):
     # Query the Material Request items based on the selected Material Request
     items = frappe.db.sql("""
-        SELECT item_code, item_name, qty, uom, rate
+        SELECT name,item_code, item_name, qty, uom, rate
         FROM `tabMaterial Request Item`
         WHERE parent = %s
     """, (mr_name,), as_dict=True)
