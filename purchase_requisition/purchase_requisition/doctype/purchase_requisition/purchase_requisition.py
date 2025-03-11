@@ -113,7 +113,7 @@ def create_purchase_requisition(material_request):
 def get_pr_items(pr_name):
     # Fetch items from Purchase Requisition
     items = frappe.db.sql("""
-        SELECT item_code, name1, qty, uom, last_purchase_rate,target_warehouse
+        SELECT name, item_code, name1, qty, uom, last_purchase_rate,target_warehouse, schedule_date
         FROM `tabPurchase Requisition CT`
         WHERE parent = %s
     """, (pr_name,), as_dict=True)

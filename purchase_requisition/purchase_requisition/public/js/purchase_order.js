@@ -27,8 +27,10 @@ frappe.ui.form.on('Purchase Order', {
                                         child_row.qty = item.qty;
                                         child_row.uom = item.uom;
                                         child_row.rate = item.last_purchase_rate;
+                                        child_row.schedule_date = item.schedule_date;
                                         child_row.warehouse = item.target_warehouse;
-                                        child_row.purchase_requisition = values.pr_name;  
+                                        child_row.custom_purchase_requisition = values.pr_name; 
+                                        child_row.custom_purchase_requisition_item = item.name;  
 
                                         frm.refresh_field('items');
                                     });
