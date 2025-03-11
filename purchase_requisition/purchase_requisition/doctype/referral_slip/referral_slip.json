@@ -7,9 +7,13 @@
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
-  "column_break_twoy",
+  "column_break_yputk",
   "posting_date_and_time",
-  "column_break_varf",
+  "column_break_qdok6",
+  "terminal",
+  "column_break_3mnw3",
+  "company",
+  "column_break_scxgr",
   "referral_slip",
   "section_break_hvtx",
   "patient",
@@ -211,10 +215,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "column_break_varf",
-   "fieldtype": "Column Break"
-  },
-  {
    "default": "OPD",
    "fieldname": "referral_slip",
    "fieldtype": "Select",
@@ -252,11 +252,7 @@
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
-   "options": "RS-.YYYY.-.MM.-"
-  },
-  {
-   "fieldname": "column_break_twoy",
-   "fieldtype": "Column Break"
+   "options": "RL-.YYYY.-.MM.-"
   },
   {
    "fetch_from": "refer_from.practitioner_name",
@@ -281,12 +277,41 @@
   {
    "fieldname": "column_break_9bz7v",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "terminal",
+   "fieldtype": "Link",
+   "label": "Terminal",
+   "options": "Terminal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_yputk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_qdok6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_3mnw3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_scxgr",
+   "fieldtype": "Column Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-18 18:04:14.072338",
+ "modified": "2025-03-07 10:34:23.240761",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Referral Slip",
