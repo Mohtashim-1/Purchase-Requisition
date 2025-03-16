@@ -16,7 +16,7 @@ class PurchaseRequisition(Document):
         for i in self.purchase_requisition_ct:
             # Ensure that the query is properly parameterized
             rate = frappe.db.sql("""
-                SELECT poi.rate, poi.amount, po.supplier 
+                SELECT poi.rate, poi.amount, po.supplier, po.transaction_date 
                 FROM `tabPurchase Order` po
                 LEFT JOIN `tabPurchase Order Item` poi ON poi.parent = po.name
                 WHERE poi.item_code = %s
@@ -31,6 +31,8 @@ class PurchaseRequisition(Document):
                 # Update the existing row with the fetched rate and supplier
                 i.last_purchase_rate = rate[0].get('rate', 0.0)  # Default to 0.0 if rate is None
                 i.last_purchased_vendor = rate[0].get('supplier', '')
+                i.last_purchased_date = rate[0].get('transaction_date')
+                
             else:
                 # Handle the case where no result is found (optional)
                 frappe.msgprint(f'No purchase order found for item code: {i.item_code}')
@@ -71,7 +73,11 @@ def make_purchase_order(purchase_requisition_name, supplier):
             "item_code": item.item_code,
             "qty": item.qty,
             "schedule_date": item.schedule_date,
-            "warehouse": item.target_warehouse
+            "warehouse": item.target_warehouse,
+            "material_request":item.material_request,
+            "material_request_item":item.material_request_item,
+            "custom_purchase_requisition":purchase_requisition_name,
+            "custom_purchase_requisition_item":item.name,
         })
     
     # Save and return the newly created document
@@ -99,7 +105,9 @@ def create_purchase_requisition(material_request):
             "qty": item.qty,
             "uom": item.uom,
             "rate": item.rate,
-            "material_request": mr_doc.name  # Link the MR item to PR
+            "target_warehouse":item.warehouse,
+            "material_request": mr_doc.name,
+            "material_request_item": item.name,  # Link the MR item to PR
         })
 
     # Save and submit the Purchase Requisition

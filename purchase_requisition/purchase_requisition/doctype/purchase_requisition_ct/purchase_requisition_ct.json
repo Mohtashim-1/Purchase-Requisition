@@ -6,19 +6,28 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "item_details_section",
   "item_code",
-  "qty",
-  "uom",
-  "column_break_rjze",
+  "column_break_jgcj",
   "name1",
-  "last_purchase_rate",
-  "last_purchased_vendor",
-  "column_break_etrc",
-  "material_request",
+  "column_break_bbzd",
   "group",
-  "column_break_owom",
+  "quantity_details_section",
+  "qty",
+  "column_break_mgnk",
+  "uom",
+  "warehouse_section",
   "target_warehouse",
-  "schedule_date"
+  "last_purchased_detail_section",
+  "last_purchased_vendor",
+  "column_break_ggpw",
+  "last_purchase_rate",
+  "column_break_fuma",
+  "last_purchased_date",
+  "reference_section",
+  "material_request",
+  "column_break_gzrt",
+  "material_request_item"
  ],
  "fields": [
   {
@@ -61,7 +70,7 @@
    "in_list_view": 1,
    "in_preview": 1,
    "in_standard_filter": 1,
-   "label": "Last Purchase Rate"
+   "label": "Last Purchased Rate"
   },
   {
    "columns": 1,
@@ -78,28 +87,9 @@
    "label": "Last Purchased Vendor"
   },
   {
-   "fieldname": "schedule_date",
-   "fieldtype": "Date",
-   "label": "Schedule Date"
-  },
-  {
-   "fieldname": "column_break_rjze",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "column_break_etrc",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "column_break_owom",
-   "fieldtype": "Column Break"
-  },
-  {
    "columns": 1,
    "fieldname": "material_request",
    "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
    "label": "Material Request",
    "options": "Material Request"
   },
@@ -111,12 +101,75 @@
    "in_standard_filter": 1,
    "label": "Target Warehouse",
    "options": "Warehouse"
+  },
+  {
+   "fieldname": "reference_section",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "columns": 1,
+   "fieldname": "material_request_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Material Request Item",
+   "options": "Material Request Item"
+  },
+  {
+   "fieldname": "column_break_gzrt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_purchased_detail_section",
+   "fieldtype": "Section Break",
+   "label": "Last Purchased Detail"
+  },
+  {
+   "fieldname": "column_break_ggpw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_fuma",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_purchased_date",
+   "fieldtype": "Date",
+   "label": "Last Purchased Date"
+  },
+  {
+   "fieldname": "item_details_section",
+   "fieldtype": "Section Break",
+   "label": "Item Details"
+  },
+  {
+   "fieldname": "column_break_jgcj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quantity_details_section",
+   "fieldtype": "Section Break",
+   "label": "Quantity Details"
+  },
+  {
+   "fieldname": "column_break_mgnk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "warehouse_section",
+   "fieldtype": "Section Break",
+   "label": "Warehouse"
+  },
+  {
+   "fieldname": "column_break_bbzd",
+   "fieldtype": "Column Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-03-11 23:37:10.619916",
+ "modified": "2025-03-16 18:28:02.551983",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition CT",
