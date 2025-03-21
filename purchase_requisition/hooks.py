@@ -125,6 +125,13 @@ doctype_js = {
 # ---------------
 # Hook on document methods and events
 
+doc_events = {
+    "Purchase Order": {
+        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
+    }
+}
+
+
 # doc_events = {
 # 	"*": {
 # 		"on_update": "method",

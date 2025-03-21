@@ -1,3 +1,40 @@
+frappe.ui.form.on('Purchase Order Item', {
+    custom_gross_rate: function (frm, cdt, cdn) {
+        update_discount_fields(frm, cdt, cdn);
+    },
+    custom_discount_: function (frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (row.custom_discount_ !== undefined && row.custom_gross_rate > 0) {
+            frappe.model.set_value(cdt, cdn, 'custom_discounted_amount', 
+                (row.custom_discount_ / 100) * row.custom_gross_rate);
+        }
+    },
+    custom_discounted_amount: function (frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (row.custom_discounted_amount !== undefined && row.custom_gross_rate > 0) {
+            frappe.model.set_value(cdt, cdn, 'custom_discount_', 
+                (row.custom_discounted_amount / row.custom_gross_rate) * 100);
+        }
+    }
+});
+
+// Helper function to update discount fields when `custom_gross_rate` changes
+function update_discount_fields(frm, cdt, cdn) {
+    frappe.msgprint('1')
+    let row = locals[cdt][cdn];
+
+    if (row.custom_gross_rate > 0) {
+        if (row.custom_discount_ !== undefined) {
+            frappe.model.set_value(cdt, cdn, 'custom_discounted_amount', 
+                (row.custom_discount_ / 100) * row.custom_gross_rate);
+        } else if (row.custom_discounted_amount !== undefined) {
+            frappe.model.set_value(cdt, cdn, 'custom_discount_', 
+                (row.custom_discounted_amount / row.custom_gross_rate) * 100);
+        }
+    }
+}
+
+
 frappe.ui.form.on('Purchase Order', {
     refresh: function (frm) {
         if (frm.doc.docstatus === 0) {  // Ensure it's only available in draft mode
