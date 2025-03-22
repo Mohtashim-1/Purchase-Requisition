@@ -12,6 +12,8 @@
   "name1",
   "column_break_bbzd",
   "group",
+  "description_section",
+  "description",
   "quantity_details_section",
   "qty",
   "column_break_mgnk",
@@ -164,12 +166,27 @@
   {
    "fieldname": "column_break_bbzd",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "description_section",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Description"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-03-16 18:28:02.551983",
+ "modified": "2025-03-22 14:08:11.950058",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition CT",
