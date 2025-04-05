@@ -77,6 +77,11 @@ frappe.ui.form.on('Purchase Order', {
                     pi_item.discount_percentage = item.discount_percentage;
                     pi_item.discount_amount = item.discount_amount;
 
+                    pi_item.custom_gross_total = item.custom_gross_rate;
+                    pi_item.custom_discount_percentage = item.custom_discount_;
+                    pi_item.custom_discounted_amount = item.custom_discounted_amount;
+                    pi_item.custom_net_amount = item.custom_net_total;
+
                     pi_item.custom_material_request = item.material_request;
                     pi_item.custom_material_request_item = item.material_request_item;
 
