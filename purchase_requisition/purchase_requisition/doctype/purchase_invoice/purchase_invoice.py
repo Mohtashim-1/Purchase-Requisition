@@ -2,26 +2,26 @@ import frappe
 
 def calculation_pi(doc, method):
     for i in doc.items:
-        # i.custom_gross_rate = i.qty * i.rate
+        i.custom_gross_total = i.qty * i.rate
         i.amount -= i.custom_discounted_amount
-        # i.custom_net_total = i.custom_gross_rate - i.custom_discounted_amount 
+        i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount 
 
-        # frappe.db.commit()
+        frappe.db.commit()
 
         # percentage calculation
 
-        # if not i.custom_gross_rate or i.custom_gross_rate <= 0:
-        #     return
+        if not i.custom_gross_total or i.custom_gross_total <= 0:
+            return
 
-        # if i.custom_discount_ is not None:
-        #     # Recalculate the discounted amount when the discount percentage is present
-        #     i.custom_discounted_amount = (i.custom_discount_ / 100) * i.custom_gross_rate
+        if i.custom_discount_percentage is not None:
+            # Recalculate the discounted amount when the discount percentage is present
+            i.custom_discounted_amount = (i.custom_discount_percentage / 100) * i.custom_gross_total
 
-        # elif i.custom_discounted_amount is not None:
-        #     # Recalculate the discount percentage when the discounted amount is present
-        #     i.custom_discount_ = (i.custom_discounted_amount / i.custom_gross_rate) * 100
+        elif i.custom_discounted_amount is not None:
+            # Recalculate the discount percentage when the discounted amount is present
+            i.custom_discount_percentage = (i.custom_discounted_amount / i.custom_gross_total) * 100
 
-        # frappe.db.commit()
+        frappe.db.commit()
     
     # amount total
     total = 0
@@ -31,7 +31,7 @@ def calculation_pi(doc, method):
     # gross rate total 
     gross_rate = 0
     for i in doc.items:
-        gross_rate += i.custom_gross_rate   
+        gross_rate += i.custom_gross_total   
     doc.custom_gross_rate = gross_rate
     # discounted amount total
     discounted_amount = 0
@@ -46,6 +46,6 @@ def calculation_pi(doc, method):
     # net rate total 
     net_rate = 0 
     for i in doc.items:
-        net_rate += i.custom_net_total 
+        net_rate += i.custom_net_amount 
     doc.custom_net_rate = net_rate
 
