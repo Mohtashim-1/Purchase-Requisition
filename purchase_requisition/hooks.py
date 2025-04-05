@@ -128,7 +128,10 @@ doctype_js = {
 doc_events = {
     "Purchase Order": {
         "validate": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
-    }
+    },
+    "Purchase Invoice": {
+        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi"
+    },
 }
 
 
