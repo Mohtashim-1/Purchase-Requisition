@@ -132,6 +132,9 @@ doc_events = {
     "Purchase Invoice": {
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi"
     },
+    "Purchase Receipt": {
+        "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_receipt.purchase_receipt.get_pr_in_grn"
+    },
 }
 
 
