@@ -1,4 +1,6 @@
 import frappe
+from frappe.utils import money_in_words
+
 
 def calculation_pi(doc, method):
     for i in doc.items:
@@ -22,6 +24,12 @@ def calculation_pi(doc, method):
             i.custom_discount_percentage = (i.custom_discounted_amount / i.custom_gross_total) * 100
 
         frappe.db.commit()
+        
+    for j in doc.taxes:
+        j.tax_amount = float(doc.custom_net_rate) * (float(j.rate) / 100)
+        # j.tax_amount = 0
+        frappe.db.commit()
+        
     
     # amount total
     total = 0
@@ -48,4 +56,9 @@ def calculation_pi(doc, method):
     for i in doc.items:
         net_rate += i.custom_net_amount 
     doc.custom_net_rate = net_rate
+    doc.grand_total = net_rate
+    doc.rounded_total = net_rate
+    doc.outstanding_amount = net_rate
+    doc.in_words = money_in_words(net_rate, doc.currency)
+    # doc.in_words = # how to do  i have this doc.in_words field it is showing in_words from doc.grand_total field i want in_words will show from doc.net_total is it possible in erpnext python 
 
