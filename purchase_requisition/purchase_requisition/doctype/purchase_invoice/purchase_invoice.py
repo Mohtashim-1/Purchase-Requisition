@@ -56,9 +56,9 @@ def calculation_pi(doc, method):
     for i in doc.items:
         net_rate += i.custom_net_amount 
     doc.custom_net_rate = net_rate
-    doc.grand_total = net_rate
-    doc.rounded_total = net_rate
-    doc.outstanding_amount = net_rate
-    doc.in_words = money_in_words(net_rate, doc.currency)
+    doc.grand_total = net_rate + doc.total_taxes_and_charges
+    doc.rounded_total = net_rate + doc.total_taxes_and_charges
+    doc.outstanding_amount = net_rate + doc.total_taxes_and_charges
+    doc.in_words = money_in_words(doc.grand_total, doc.currency)
     # doc.in_words = # how to do  i have this doc.in_words field it is showing in_words from doc.grand_total field i want in_words will show from doc.net_total is it possible in erpnext python 
 
