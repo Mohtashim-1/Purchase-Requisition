@@ -24,12 +24,14 @@ def calculation_pi(doc, method):
             i.custom_discount_percentage = (i.custom_discounted_amount / i.custom_gross_total) * 100
 
         frappe.db.commit()
-        
+    
+    tax_total = 0    
     for j in doc.taxes:
         j.tax_amount = float(doc.custom_net_rate) * (float(j.rate) / 100)
-        # j.tax_amount = 0
-        frappe.db.commit()
-        
+        tax_total += j.tax_amount  # Now summing the updated value
+    doc.taxes_and_charges_added = tax_total
+    doc.total_taxes_and_charges = tax_total
+    frappe.db.commit()    
     
     # amount total
     total = 0
