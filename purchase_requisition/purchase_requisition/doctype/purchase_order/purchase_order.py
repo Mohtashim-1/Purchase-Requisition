@@ -16,6 +16,7 @@ def hello_world(doc, method):
         if i.custom_discount_ is not None:
             # Recalculate the discounted amount when the discount percentage is present
             i.custom_discounted_amount = (i.custom_discount_ / 100) * i.custom_gross_rate
+            
 
         elif i.custom_discounted_amount is not None:
             # Recalculate the discount percentage when the discounted amount is present

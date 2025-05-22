@@ -30,7 +30,8 @@ app_license = "mit"
 # include js in doctype views
 doctype_js = {
     "Material Request" : "purchase_requisition/public/js/material_request.js",
-    "Purchase Order": "purchase_requisition/public/js/purchase_order.js"
+    "Purchase Order": "purchase_requisition/public/js/purchase_order.js",
+    "Purchase Invoice":"purchase_requisition/public/js/purchase_invoice.js",
     }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -127,10 +128,13 @@ doctype_js = {
 
 doc_events = {
     "Purchase Order": {
-        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
+        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world",
+        "before_submit": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world",
+        "after_insert": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
     },
     "Purchase Invoice": {
-        "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi"
+        "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi",
+        "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate"
     },
     "Purchase Receipt": {
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_receipt.purchase_receipt.get_pr_in_grn"

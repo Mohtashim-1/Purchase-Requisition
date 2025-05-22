@@ -2,10 +2,17 @@ import frappe
 from frappe.utils import money_in_words
 
 
+def preserve_po_rate(doc, method):
+    for item in doc.items:
+        if item.po_detail:
+            po_item = frappe.db.get_value("Purchase Order Item", item.po_detail, "rate")
+            if po_item:
+                item.rate = po_item
+
 def calculation_pi(doc, method):
     for i in doc.items:
         i.custom_gross_total = i.qty * i.rate
-        i.amount -= i.custom_discounted_amount
+        i.amount = i.custom_net_amount
         i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount 
 
         frappe.db.commit()
@@ -18,10 +25,14 @@ def calculation_pi(doc, method):
         if i.custom_discount_percentage is not None:
             # Recalculate the discounted amount when the discount percentage is present
             i.custom_discounted_amount = (i.custom_discount_percentage / 100) * i.custom_gross_total
+            i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount
+            i.amount = i.custom_net_amount
 
         elif i.custom_discounted_amount is not None:
             # Recalculate the discount percentage when the discounted amount is present
             i.custom_discount_percentage = (i.custom_discounted_amount / i.custom_gross_total) * 100
+            i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount
+            i.amount = i.custom_net_amount
 
         frappe.db.commit()
     
