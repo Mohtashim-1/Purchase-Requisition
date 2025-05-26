@@ -2,10 +2,11 @@ import frappe
 
 def hello_world(doc, method):
     for i in doc.items:
+        # i.amount = i.qty * i.rate  # standard amount calculation
         i.custom_gross_rate = i.qty * i.rate
-        i.amount -= i.custom_discounted_amount
+        
         i.custom_net_total = i.custom_gross_rate - i.custom_discounted_amount 
-
+        i.amount = i.custom_net_total
         frappe.db.commit()
 
         # percentage calculation

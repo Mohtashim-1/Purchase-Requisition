@@ -179,9 +179,12 @@ doc_events = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "purchase_requisition.event.get_events"
-# }
+
+override_whitelisted_methods = {
+	"erpnext.stock.doctype.purchase_receipt.purchase_receipt.make_purchase_invoice":
+        "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.make_purchase_invoice_custom"
+}
+
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,

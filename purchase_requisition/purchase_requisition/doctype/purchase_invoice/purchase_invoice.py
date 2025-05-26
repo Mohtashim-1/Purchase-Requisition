@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import money_in_words
+from frappe.model.mapper import get_mapped_doc
 
 
 def preserve_po_rate(doc, method):
@@ -8,70 +9,122 @@ def preserve_po_rate(doc, method):
             po_item = frappe.db.get_value("Purchase Order Item", item.po_detail, "rate")
             if po_item:
                 item.rate = po_item
-
 def calculation_pi(doc, method):
+    gross_total = 0
+    discounted_total = 0
+    net_total = 0
+
     for i in doc.items:
+        # Always compute gross
         i.custom_gross_total = i.qty * i.rate
-        i.amount = i.custom_net_amount
-        i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount 
 
-        frappe.db.commit()
-
-        # percentage calculation
-
-        if not i.custom_gross_total or i.custom_gross_total <= 0:
-            return
-
-        if i.custom_discount_percentage is not None:
-            # Recalculate the discounted amount when the discount percentage is present
+        # Only compute discount if one value is missing
+        if i.custom_discount_percentage and not i.custom_discounted_amount:
             i.custom_discounted_amount = (i.custom_discount_percentage / 100) * i.custom_gross_total
-            i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount
-            i.amount = i.custom_net_amount
 
-        elif i.custom_discounted_amount is not None:
-            # Recalculate the discount percentage when the discounted amount is present
+        elif i.custom_discounted_amount and not i.custom_discount_percentage:
             i.custom_discount_percentage = (i.custom_discounted_amount / i.custom_gross_total) * 100
-            i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount
-            i.amount = i.custom_net_amount
 
-        frappe.db.commit()
-    
-    tax_total = 0    
+        # If both missing, assume 0
+        if not i.custom_discounted_amount:
+            i.custom_discounted_amount = 0
+        if not i.custom_discount_percentage:
+            i.custom_discount_percentage = 0
+
+        # Final net and amount calculation
+        i.custom_net_amount = i.custom_gross_total - i.custom_discounted_amount
+        i.amount = i.custom_net_amount
+
+        # Totals
+        gross_total += i.custom_gross_total
+        discounted_total += i.custom_discounted_amount
+        net_total += i.custom_net_amount
+
+    # Update parent fields
+    doc.custom_gross_rate = gross_total
+    doc.custom_discounted_amount = discounted_total
+    doc.custom_discounted_percentage = (discounted_total / gross_total * 100) if gross_total else 0
+    doc.custom_net_rate = net_total
+
+    # Taxes (if any)
+    tax_total = 0
     for j in doc.taxes:
-        j.tax_amount = float(doc.custom_net_rate) * (float(j.rate) / 100)
-        tax_total += j.tax_amount  # Now summing the updated value
+        j.tax_amount = float(net_total) * (float(j.rate) / 100)
+        tax_total += j.tax_amount
+
     doc.taxes_and_charges_added = tax_total
     doc.total_taxes_and_charges = tax_total
-    frappe.db.commit()    
+
+    # Final totals
+    doc.total = net_total
+    doc.grand_total = net_total + tax_total
+    doc.rounded_total = doc.grand_total
+    doc.outstanding_amount = doc.grand_total
+
+    # Set in_words from custom_net_rate (your request)
+    doc.in_words = money_in_words(doc.custom_net_rate, doc.currency)
     
-    # amount total
-    total = 0
-    for i in doc.items:
-        total += i.amount
-    doc.total = total
-    # gross rate total 
-    gross_rate = 0
-    for i in doc.items:
-        gross_rate += i.custom_gross_total   
-    doc.custom_gross_rate = gross_rate
-    # discounted amount total
-    discounted_amount = 0
-    for i in doc.items:
-        discounted_amount += i.custom_discounted_amount
-    doc.custom_discounted_amount = discounted_amount
+@frappe.whitelist()
+def make_purchase_invoice_custom(source_name, target_doc=None):
+    def postprocess(source_doc, target_doc):
+        target_doc.ignore_pricing_rule = 1
+        target_doc.run_method("set_missing_values")
+        target_doc.run_method("calculate_taxes_and_totals")
 
-    # discounted percentage total
-    doc.custom_discounted_percentage = (doc.custom_discounted_amount / doc.custom_gross_rate) * 100
+    
+@frappe.whitelist()
+def make_purchase_invoice_custom(source_name, target_doc=None):
+    def postprocess(source_doc, target_doc):
+        target_doc.ignore_pricing_rule = 1
+        target_doc.run_method("set_missing_values")
+        target_doc.run_method("calculate_taxes_and_totals")
 
+    def set_missing_discount_fields(source_item, target_item, source_parent):
+        # Get PO and PO Item if available
+        purchase_order = getattr(source_item, "purchase_order", None)
+        purchase_order_item = getattr(source_item, "purchase_order_item", None)
 
-    # net rate total 
-    net_rate = 0 
-    for i in doc.items:
-        net_rate += i.custom_net_amount 
-    doc.custom_net_rate = net_rate
-    doc.grand_total = net_rate + doc.total_taxes_and_charges
-    doc.rounded_total = net_rate + doc.total_taxes_and_charges
-    doc.outstanding_amount = net_rate + doc.total_taxes_and_charges
-    doc.in_words = money_in_words(doc.grand_total, doc.currency)
-    # doc.in_words = # how to do  i have this doc.in_words field it is showing in_words from doc.grand_total field i want in_words will show from doc.net_total is it possible in erpnext python 
+        if purchase_order and purchase_order_item:
+            po_item = frappe.get_value(
+                "Purchase Order Item",
+                purchase_order_item,
+                [
+                    "custom_gross_rate",
+                    "custom_discount_",
+                    "custom_discounted_amount",
+                    "custom_net_total"
+                ],
+                as_dict=True
+            )
+            if po_item:
+                target_item.custom_gross_rate = po_item.custom_gross_rate
+                target_item.custom_discount_ = po_item.custom_discount_
+                target_item.custom_discounted_amount = po_item.custom_discounted_amount
+                target_item.custom_net_total = po_item.custom_net_total
 
+    return get_mapped_doc(
+        "Purchase Receipt",
+        source_name,
+        {
+            "Purchase Receipt": {
+                "doctype": "Purchase Invoice",
+                "validation": {"docstatus": ["=", 1]},
+            },
+            "Purchase Receipt Item": {
+                "doctype": "Purchase Invoice Item",
+                "field_map": {
+                    "name": "pr_detail",
+                    "parent": "purchase_receipt",
+                    "purchase_order": "purchase_order",
+                    "purchase_order_item": "po_detail",  # Needed by ERPNext
+                    "custom_gross_total":"custom_gross_rate",
+                    "custom_discounted_amount": "custom_discounted_amount",
+                    "custom_discounted_percentage": "custom_discount_",
+                    "custom_net_rate": "custom_net_total"
+                },
+                "postprocess": set_missing_discount_fields,
+            },
+        },
+        target_doc,
+        postprocess,
+    )
