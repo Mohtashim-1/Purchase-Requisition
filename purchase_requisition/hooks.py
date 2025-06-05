@@ -133,7 +133,7 @@ doc_events = {
         "after_insert": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
     },
     "Purchase Invoice": {
-        "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi",
+        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi",
         "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate"
     },
     "Purchase Receipt": {

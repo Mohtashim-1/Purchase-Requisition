@@ -9,6 +9,7 @@ def preserve_po_rate(doc, method):
             po_item = frappe.db.get_value("Purchase Order Item", item.po_detail, "rate")
             if po_item:
                 item.rate = po_item
+
 def calculation_pi(doc, method):
     gross_total = 0
     discounted_total = 0
@@ -47,23 +48,23 @@ def calculation_pi(doc, method):
     doc.custom_net_rate = net_total
 
     # Taxes (if any)
-    tax_total = 0
-    for j in doc.taxes:
-        j.tax_amount = float(net_total) * (float(j.rate) / 100)
-        tax_total += j.tax_amount
+    # tax_total = 0
+    # for j in doc.taxes:
+    #     j.tax_amount = float(net_total) * (float(j.rate) / 100)
+    #     tax_total += j.tax_amount
 
-    doc.taxes_and_charges_added = tax_total
-    doc.total_taxes_and_charges = tax_total
+    # doc.taxes_and_charges_added = tax_total
+    # doc.total_taxes_and_charges = tax_total
 
     # Final totals
     doc.total = net_total
-    doc.grand_total = net_total + tax_total
+    doc.grand_total = net_total + doc.total_taxes_and_charges
     doc.rounded_total = doc.grand_total
     doc.outstanding_amount = doc.grand_total
 
     # Set in_words from custom_net_rate (your request)
     doc.in_words = money_in_words(doc.custom_net_rate, doc.currency)
-    
+
 @frappe.whitelist()
 def make_purchase_invoice_custom(source_name, target_doc=None):
     def postprocess(source_doc, target_doc):
