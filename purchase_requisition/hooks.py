@@ -32,6 +32,7 @@ doctype_js = {
     "Material Request" : "purchase_requisition/public/js/material_request.js",
     "Purchase Order": "purchase_requisition/public/js/purchase_order.js",
     "Purchase Invoice":"purchase_requisition/public/js/purchase_invoice.js",
+    "Sales Invoice": "purchase_requisition/custom/sales_invoice.js",
     }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -138,6 +139,10 @@ doc_events = {
     },
     "Purchase Receipt": {
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_receipt.purchase_receipt.get_pr_in_grn"
+    },
+    "Sales Invoice": {
+        "before_insert": "purchase_requisition.purchase_requisition.custom.sales_invoice.before_insert",
+        "onload": "purchase_requisition.purchase_requisition.custom.sales_invoice.onload"
     },
 }
 
