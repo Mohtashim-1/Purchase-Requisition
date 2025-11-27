@@ -5,6 +5,13 @@ class PurchaseRequisition(Document):
     def validate(self):
         self.last_purchase_rate()
         self.schedule_date()
+        self.calculate_total_qty()
+    
+    def calculate_total_qty(self):
+        total_qty = 0
+        for i in self.purchase_requisition_ct:
+            total_qty += i.qty
+        self.total_qty = total_qty
     
     def schedule_date(self):
         delivery = self.delivery_date

@@ -18,7 +18,8 @@
   "notes_section",
   "notes",
   "section_break_bgn5",
-  "amended_from"
+  "amended_from",
+  "total_qty"
  ],
  "fields": [
   {
@@ -93,12 +94,17 @@
    "fieldname": "notes",
    "fieldtype": "Text Editor",
    "label": "Notes"
+  },
+  {
+   "fieldname": "total_qty",
+   "fieldtype": "Float",
+   "label": "Total Quantity"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-03-22 14:09:24.312890",
+ "modified": "2025-11-28 03:08:08.905931",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Purchase Requisition",
