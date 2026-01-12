@@ -187,7 +187,9 @@ doc_events = {
 
 override_whitelisted_methods = {
 	"erpnext.stock.doctype.purchase_receipt.purchase_receipt.make_purchase_invoice":
-        "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.make_purchase_invoice_custom"
+        "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.make_purchase_invoice_custom",
+    "erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_receipt":
+        "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.make_purchase_receipt_custom",
 }
 
 #
@@ -254,4 +256,3 @@ override_whitelisted_methods = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-
