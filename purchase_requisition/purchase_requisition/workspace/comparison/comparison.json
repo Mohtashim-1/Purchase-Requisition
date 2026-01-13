@@ -1,0 +1,76 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"wKC5e5FNDB\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Comparison</span>\",\"col\":12}},{\"id\":\"V45PIorEGf\",\"type\":\"card\",\"data\":{\"card_name\":\"Transaction\",\"col\":4}},{\"id\":\"ShEptw-mrw\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-01-13 21:36:50.282973",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Comparison",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Transaction",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Generic Mapping",
+   "link_count": 0,
+   "link_to": "Generic Mapping",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Generic Vendor Quotation",
+   "link_count": 0,
+   "link_to": "Generic Vendor Quotation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Generic Supplier Comparison",
+   "link_count": 0,
+   "link_to": "Generic Supplier Comparison",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-01-13 21:38:00.702313",
+ "modified_by": "Administrator",
+ "module": "Purchase Requisition",
+ "name": "Comparison",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 29.0,
+ "shortcuts": [],
+ "title": "Comparison"
+}
