@@ -5,7 +5,7 @@ from frappe.utils import flt, getdate
 from frappe.model.naming import make_autoname
 
 POSTING_DATE = getdate("2026-01-01")
-MAX_ROWS_PER_DOC = 500
+MAX_ROWS_PER_DOC = 100
 LOCK_RETRY_COUNT = 3
 LOCK_RETRY_SLEEP_SEC = 5
 
