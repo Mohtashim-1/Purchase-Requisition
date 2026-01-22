@@ -147,6 +147,7 @@ def run_fix(dry_run=False):
                     doc.name = make_autoname(doc.naming_series)
                     doc.set_parent_in_children()
                     doc.insert(ignore_permissions=True)
+                    doc.flags.ignore_validate_update_after_submit = True
                     doc.submit()
                     frappe.db.commit()
                     processed_items += len(chunk)
