@@ -4,14 +4,6 @@ import frappe
 from frappe.utils import flt, getdate
 from frappe.model.naming import make_autoname
 
-# Try to import EmptyStockReconciliationItemsError, fallback to None if it fails
-try:
-    from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import (
-        EmptyStockReconciliationItemsError,
-    )
-except (ImportError, AttributeError):
-    EmptyStockReconciliationItemsError = None
-
 POSTING_DATE = getdate("2026-01-01")
 MAX_ROWS_PER_DOC = 100
 LOCK_RETRY_COUNT = 3
@@ -19,6 +11,10 @@ LOCK_RETRY_SLEEP_SEC = 5
 
 # If your PO Item custom field is different name, change here:
 PO_NET_TOTAL_FIELD = "custom_net_total"
+
+# January date range for Stock Entry updates
+JANUARY_START = getdate("2026-01-01")
+JANUARY_END = getdate("2026-01-31")
 
 
 def get_last_po_rate_map():
@@ -108,7 +104,139 @@ def get_last_sle_rate(item_code, warehouse, batch_no):
     return flt(row[0].valuation_rate) if row else 0.0
 
 
-def run_fix(dry_run=False):
+def get_january_stock_entries():
+    """
+    Returns all submitted Stock Entries posted in January 2026.
+    """
+    return frappe.db.sql(
+        """
+        SELECT name, posting_date, posting_time
+        FROM `tabStock Entry`
+        WHERE docstatus = 1
+          AND posting_date >= %(start_date)s
+          AND posting_date <= %(end_date)s
+        ORDER BY posting_date, posting_time, creation
+        """,
+        {"start_date": JANUARY_START, "end_date": JANUARY_END},
+        as_dict=True,
+    )
+
+
+def update_stock_entry_rates(po_rates, dry_run=False):
+    """
+    Update all Stock Entry items posted in January with last purchase rates.
+    """
+    stock_entries = get_january_stock_entries()
+    
+    stats = {
+        "total_stock_entries": len(stock_entries),
+        "total_items_processed": 0,
+        "total_items_updated": 0,
+        "skipped_no_po_rate": 0,
+        "skipped_no_change": 0,
+        "errors": 0,
+    }
+    
+    if dry_run:
+        # Count items that would be updated
+        for se in stock_entries:
+            items = frappe.db.sql(
+                """
+                SELECT item_code, basic_rate, name
+                FROM `tabStock Entry Detail`
+                WHERE parent = %(parent)s
+                  AND item_code IS NOT NULL
+                  AND item_code != ''
+                """,
+                {"parent": se.name},
+                as_dict=True,
+            )
+            
+            for item in items:
+                stats["total_items_processed"] += 1
+                if item.item_code in po_rates:
+                    new_rate = flt(po_rates[item.item_code])
+                    current_rate = flt(item.basic_rate) or 0.0
+                    if abs(current_rate - new_rate) >= 0.0001:
+                        stats["total_items_updated"] += 1
+                    else:
+                        stats["skipped_no_change"] += 1
+                else:
+                    stats["skipped_no_po_rate"] += 1
+        
+        return {"stats": stats}
+    
+    # Actual update
+    processed_entries = 0
+    start_ts = time.monotonic()
+    
+    for se in stock_entries:
+        try:
+            # Get the Stock Entry document
+            doc = frappe.get_doc("Stock Entry", se.name, for_update=True)
+            updated = False
+            
+            # Update each item with PO rate if available
+            for item in doc.items:
+                stats["total_items_processed"] += 1
+                
+                if not item.item_code or item.item_code not in po_rates:
+                    if item.item_code:
+                        stats["skipped_no_po_rate"] += 1
+                    continue
+                
+                new_rate = flt(po_rates[item.item_code])
+                current_rate = flt(item.basic_rate) or 0.0
+                
+                # Skip if rate is already the same
+                if abs(current_rate - new_rate) < 0.0001:
+                    stats["skipped_no_change"] += 1
+                    continue
+                
+                # Update the basic_rate
+                item.basic_rate = new_rate
+                updated = True
+                stats["total_items_updated"] += 1
+            
+            # Recalculate amounts if any item was updated
+            if updated:
+                doc.calculate_rate_and_amount(reset_outgoing_rate=False, raise_error_if_no_rate=False)
+                doc.flags.ignore_validate_update_after_submit = True
+                doc.save(ignore_permissions=True)
+                frappe.db.commit()
+                
+                processed_entries += 1
+                
+                elapsed = max(time.monotonic() - start_ts, 0.001)
+                rate = processed_entries / elapsed
+                remaining = max(len(stock_entries) - processed_entries, 0)
+                eta_sec = remaining / rate if rate else 0
+                
+                print(
+                    f"Updated Stock Entry {se.name} - "
+                    f"Processed {processed_entries}/{len(stock_entries)} entries "
+                    f"({rate:.2f} entries/sec), ETA {int(eta_sec)}s"
+                )
+            else:
+                frappe.db.rollback()
+                
+        except Exception as e:
+            frappe.db.rollback()
+            stats["errors"] += 1
+            print(f"Error updating Stock Entry {se.name}: {str(e)}")
+            continue
+    
+    return {"done": True, "stats": stats}
+
+
+def run_fix(dry_run=False, update_stock_entries=True):
+    """
+    Main function to run the valuation fix.
+    
+    Args:
+        dry_run: If True, only returns stats without making changes
+        update_stock_entries: If True, also updates Stock Entries posted in January
+    """
     po_rates = get_last_po_rate_map()
     stock_rows = get_batch_stock()
 
@@ -258,39 +386,14 @@ def run_fix(dry_run=False):
                         raise
                     time.sleep(LOCK_RETRY_SLEEP_SEC)
 
-                except Exception as e:
-                    # Check if this is EmptyStockReconciliationItemsError
-                    # (handle both direct import and fallback detection)
-                    is_empty_items_error = False
-                    
-                    # First check: direct isinstance if import worked
-                    if EmptyStockReconciliationItemsError and isinstance(e, EmptyStockReconciliationItemsError):
-                        is_empty_items_error = True
-                    else:
-                        # Fallback: check by type name and error message
-                        error_type = type(e).__name__
-                        error_str = str(e)
-                        error_type_str = str(type(e))
-                        
-                        is_empty_items_error = (
-                            error_type == "EmptyStockReconciliationItemsError"
-                            or "EmptyStockReconciliationItemsError" in error_type_str
-                            or (
-                                isinstance(e, frappe.ValidationError)
-                                and (
-                                    "None of the items have any change" in error_str
-                                    or ("empty" in error_str.lower() and "items" in error_str.lower() and "change" in error_str.lower())
-                                )
-                            )
-                        )
-                    
-                    if is_empty_items_error:
-                        # All items were removed because they have no change
-                        frappe.db.rollback()
-                        stats["skipped_no_change"] += len(chunk)
-                        # Skip this document and continue
-                        break
-                    # Re-raise if it's not the empty items error
-                    raise
-
-    return {"done": True, "stats": stats}
+    result = {"done": True, "stats": stats}
+    
+    # Update Stock Entries posted in January
+    if update_stock_entries:
+        print("\n" + "="*60)
+        print("Updating Stock Entries posted in January...")
+        print("="*60)
+        se_result = update_stock_entry_rates(po_rates, dry_run=dry_run)
+        result["stock_entry_update"] = se_result
+    
+    return result
