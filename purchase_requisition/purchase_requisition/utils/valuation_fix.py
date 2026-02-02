@@ -3,9 +3,14 @@ import time
 import frappe
 from frappe.utils import flt, getdate
 from frappe.model.naming import make_autoname
-from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import (
-    EmptyStockReconciliationItemsError,
-)
+
+# Try to import EmptyStockReconciliationItemsError, fallback to None if it fails
+try:
+    from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import (
+        EmptyStockReconciliationItemsError,
+    )
+except (ImportError, AttributeError):
+    EmptyStockReconciliationItemsError = None
 
 POSTING_DATE = getdate("2026-01-01")
 MAX_ROWS_PER_DOC = 100
@@ -242,13 +247,6 @@ def run_fix(dry_run=False):
                     )
                     break
 
-                except EmptyStockReconciliationItemsError:
-                    # All items were removed because they have no change
-                    frappe.db.rollback()
-                    stats["skipped_no_change"] += len(chunk)
-                    # Skip this document and continue
-                    break
-
                 except frappe.DuplicateEntryError:
                     frappe.db.rollback()
                     if attempt == LOCK_RETRY_COUNT:
@@ -261,17 +259,32 @@ def run_fix(dry_run=False):
                     time.sleep(LOCK_RETRY_SLEEP_SEC)
 
                 except Exception as e:
-                    # Catch EmptyStockReconciliationItemsError by type name as fallback
-                    # (in case import didn't work or exception type is different)
-                    error_type = type(e).__name__
-                    if (
-                        error_type == "EmptyStockReconciliationItemsError"
-                        or "EmptyStockReconciliationItemsError" in str(type(e))
-                        or (
-                            isinstance(e, frappe.ValidationError)
-                            and "None of the items have any change" in str(e)
+                    # Check if this is EmptyStockReconciliationItemsError
+                    # (handle both direct import and fallback detection)
+                    is_empty_items_error = False
+                    
+                    # First check: direct isinstance if import worked
+                    if EmptyStockReconciliationItemsError and isinstance(e, EmptyStockReconciliationItemsError):
+                        is_empty_items_error = True
+                    else:
+                        # Fallback: check by type name and error message
+                        error_type = type(e).__name__
+                        error_str = str(e)
+                        error_type_str = str(type(e))
+                        
+                        is_empty_items_error = (
+                            error_type == "EmptyStockReconciliationItemsError"
+                            or "EmptyStockReconciliationItemsError" in error_type_str
+                            or (
+                                isinstance(e, frappe.ValidationError)
+                                and (
+                                    "None of the items have any change" in error_str
+                                    or ("empty" in error_str.lower() and "items" in error_str.lower() and "change" in error_str.lower())
+                                )
+                            )
                         )
-                    ):
+                    
+                    if is_empty_items_error:
                         # All items were removed because they have no change
                         frappe.db.rollback()
                         stats["skipped_no_change"] += len(chunk)
