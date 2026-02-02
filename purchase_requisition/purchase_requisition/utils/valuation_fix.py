@@ -260,4 +260,24 @@ def run_fix(dry_run=False):
                         raise
                     time.sleep(LOCK_RETRY_SLEEP_SEC)
 
+                except Exception as e:
+                    # Catch EmptyStockReconciliationItemsError by type name as fallback
+                    # (in case import didn't work or exception type is different)
+                    error_type = type(e).__name__
+                    if (
+                        error_type == "EmptyStockReconciliationItemsError"
+                        or "EmptyStockReconciliationItemsError" in str(type(e))
+                        or (
+                            isinstance(e, frappe.ValidationError)
+                            and "None of the items have any change" in str(e)
+                        )
+                    ):
+                        # All items were removed because they have no change
+                        frappe.db.rollback()
+                        stats["skipped_no_change"] += len(chunk)
+                        # Skip this document and continue
+                        break
+                    # Re-raise if it's not the empty items error
+                    raise
+
     return {"done": True, "stats": stats}
