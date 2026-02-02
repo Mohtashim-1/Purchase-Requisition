@@ -3,6 +3,9 @@ import time
 import frappe
 from frappe.utils import flt, getdate
 from frappe.model.naming import make_autoname
+from erpnext.stock.doctype.stock_reconciliation.stock_reconciliation import (
+    EmptyStockReconciliationItemsError,
+)
 
 POSTING_DATE = getdate("2026-01-01")
 MAX_ROWS_PER_DOC = 100
@@ -237,6 +240,13 @@ def run_fix(dry_run=False):
                         f"Processed {processed_items}/{total_items} items "
                         f"({rate:.2f} items/sec), ETA {int(eta_sec)}s"
                     )
+                    break
+
+                except EmptyStockReconciliationItemsError:
+                    # All items were removed because they have no change
+                    frappe.db.rollback()
+                    stats["skipped_no_change"] += len(chunk)
+                    # Skip this document and continue
                     break
 
                 except frappe.DuplicateEntryError:
