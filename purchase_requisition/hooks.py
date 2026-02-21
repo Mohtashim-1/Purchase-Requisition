@@ -33,6 +33,7 @@ doctype_js = {
     "Purchase Order": "purchase_requisition/public/js/purchase_order.js",
     "Purchase Invoice":"purchase_requisition/public/js/purchase_invoice.js",
     "Sales Invoice": "purchase_requisition/custom/sales_invoice.js",
+    "Stock Entry": "purchase_requisition/public/js/stock_entry.js",
     }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -119,9 +120,9 @@ doctype_js = {
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	"Stock Entry": "purchase_requisition.purchase_requisition.doctype.stock_entry_override.stock_entry_override.StockEntry"
+}
 
 # Document Events
 # ---------------
@@ -134,7 +135,11 @@ doc_events = {
         "after_insert": "purchase_requisition.purchase_requisition.doctype.purchase_order.purchase_order.hello_world"
     },
     "Purchase Invoice": {
-        "validate": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi",
+        "before_validate": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_pr_amount",
+        "validate": [
+            "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.debug_validate_multiple_billing",
+            "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi"
+        ],
         "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate"
     },
     "Purchase Receipt": {
