@@ -1,6 +1,18 @@
 import frappe
 from frappe.utils import money_in_words
 from frappe.model.mapper import get_mapped_doc
+import json
+
+
+def _pi_debug_print(label, payload=None):
+    """Print debug lines directly to bench web logs."""
+    try:
+        if payload is None:
+            print(f"[PI-DEBUG] {label}")
+        else:
+            print(f"[PI-DEBUG] {label}: {json.dumps(payload, default=str)}")
+    except Exception:
+        print(f"[PI-DEBUG] {label}: {payload}")
 
 
 def log_purchase_invoice_error(doc, item, error_type, message, details=None):
@@ -181,10 +193,9 @@ def preserve_pr_amount(doc, method):
                     
                     current_amount = flt(item.amount, amount_precision) if item.amount else 0
                     
-                    # Determine the correct amount to use
-                    # CRITICAL: The validation checks: already_billed + current_item.amount <= pr_amount * (1 + allowance)
-                    # So we must ensure: current_item.amount <= remaining_amount (with allowance)
-                    
+                    # Determine the correct amount to use.
+                    # Always clamp to remaining PR billable amount so custom UI/script
+                    # side effects on `amount` can never trigger over-billing.
                     if already_billed >= flt(pr_amount, amount_precision) - tolerance:
                         # PR is already fully billed - amount should be 0
                         correct_amount = 0
@@ -199,58 +210,59 @@ def preserve_pr_amount(doc, method):
                                 "current_amount": current_amount
                             }
                         )
-                    elif already_billed > 0:
-                        # There's already a partial bill - must use remaining amount
-                        # Allow 1% tolerance for rounding
-                        max_allowed = flt(pr_amount * 1.01, amount_precision)  # With 1% allowance
-                        if current_amount == 0:
-                            # Amount not set - use remaining amount
-                            correct_amount = flt(max(0, remaining_amount), amount_precision)
-                        elif (already_billed + current_amount) > (max_allowed + tolerance):
-                            # Would cause over-billing - use remaining amount
-                            correct_amount = flt(max(0, remaining_amount), amount_precision)
+                    else:
+                        safe_remaining = flt(max(0, remaining_amount), amount_precision)
+
+                        if current_amount <= 0:
+                            # Fresh row with no amount: use full remaining amount.
+                            correct_amount = safe_remaining
+                        elif current_amount > safe_remaining + tolerance:
+                            # Amount was inflated (usually from custom rate/gross logic): clamp it.
+                            correct_amount = safe_remaining
                             log_purchase_invoice_error(
-                                doc, item, "Adjusting Amount to Prevent Over-Billing",
-                                f"Item {item.idx}: Current amount {current_amount} + already_billed {already_billed} = {already_billed + current_amount} would exceed max allowed {max_allowed}. Setting to remaining {remaining_amount}.",
+                                doc, item, "Adjusting Amount to Remaining PR Amount",
+                                f"Item {item.idx}: current amount {current_amount} exceeded remaining PR amount {safe_remaining}. Clamped to remaining amount.",
                                 {
                                     "pr_detail": pr_detail,
                                     "pr_amount": pr_amount,
                                     "already_billed": already_billed,
                                     "current_amount": current_amount,
-                                    "remaining_amount": remaining_amount,
-                                    "max_allowed": max_allowed,
-                                    "total_if_used": already_billed + current_amount
+                                    "remaining_amount": safe_remaining,
+                                    "invoice": doc.name or "New"
                                 }
                             )
                         else:
-                            # Current amount is within limits - keep it
+                            # Partial billing row and still within remaining amount.
                             correct_amount = flt(current_amount, amount_precision)
-                    else:
-                        # No existing bill - but be conservative
-                        # If invoice exists and was previously saved, there might be a bill we're not detecting
-                        # Use remaining amount to be safe
-                        if doc.name and doc.name != 'New':
-                            # Invoice exists - be conservative and use remaining amount
-                            # This prevents over-billing if ERPNext finds something we don't
-                            correct_amount = flt(max(0, remaining_amount), amount_precision)
-                            if correct_amount != pr_amount:
-                                log_purchase_invoice_error(
-                                    doc, item, "Conservative Amount Setting",
-                                    f"Item {item.idx}: Invoice {doc.name} exists. Using remaining amount {correct_amount} instead of PR amount {pr_amount} to prevent over-billing.",
-                                    {
-                                        "pr_detail": pr_detail,
-                                        "pr_amount": pr_amount,
-                                        "remaining_amount": remaining_amount,
-                                        "correct_amount": correct_amount,
-                                        "invoice_exists": True
-                                    }
-                                )
-                        else:
-                            # New invoice - use PR amount if not set, otherwise keep current
-                            correct_amount = flt(pr_amount if current_amount == 0 else current_amount, amount_precision)
                     
                     # Set the amount
                     item.amount = correct_amount
+
+                    # Keep rate/base_rate aligned with preserved PR amount.
+                    # ERPNext can recompute amount = qty * rate during validation.
+                    qty = flt(item.qty or 0)
+                    if qty:
+                        net_rate = flt(correct_amount / qty, item.precision("rate"))
+                        item.rate = net_rate
+                        if hasattr(item, "base_rate"):
+                            item.base_rate = net_rate
+                        if hasattr(item, "base_amount"):
+                            item.base_amount = flt(correct_amount, item.precision("base_amount"))
+
+                    _pi_debug_print(
+                        "preserve_pr_amount row",
+                        {
+                            "doc": doc.name or "New",
+                            "idx": item.idx,
+                            "pr_detail": pr_detail,
+                            "current_amount_before": current_amount,
+                            "set_amount": item.amount,
+                            "set_rate": item.rate,
+                            "pr_amount": pr_amount,
+                            "already_billed": already_billed,
+                            "remaining_amount": remaining_amount,
+                        },
+                    )
                     
                     # Store flags so calculation_pi knows not to change it
                     item._pr_amount_preserved = True
@@ -306,6 +318,100 @@ def preserve_pr_amount(doc, method):
                     f"Could not get PR amount for pr_detail {pr_detail}: {str(e)}",
                     {"pr_detail": pr_detail, "error": str(e), "traceback": frappe.get_traceback()}
                 )
+
+    # One consolidated snapshot for this save attempt to debug over-billing inputs.
+    log_pre_validate_overbilling_snapshot(doc)
+
+
+def log_pre_validate_overbilling_snapshot(doc):
+    """
+    Capture exact values that ERPNext over-billing validation is expected to compare.
+    """
+    from frappe.utils import flt
+    from frappe.query_builder.functions import Sum
+    from erpnext.controllers.status_updater import get_allowance_for
+
+    try:
+        if not doc.items:
+            return
+
+        # Group current document amounts by pr_detail (same behavior as validation grouping).
+        grouped_current = {}
+        for row in doc.items:
+            if not row.get("pr_detail"):
+                continue
+            grouped_current.setdefault(row.pr_detail, frappe._dict(item_code=row.item_code, rows=[], current_total=0.0))
+            grouped_current[row.pr_detail].rows.append(row.idx)
+            grouped_current[row.pr_detail].current_total += flt(row.amount or 0)
+
+        if not grouped_current:
+            return
+
+        pii = frappe.qb.DocType("Purchase Invoice Item")
+        pri = frappe.qb.DocType("Purchase Receipt Item")
+
+        snapshot_rows = []
+        for pr_detail, entry in grouped_current.items():
+            pr_data = frappe.db.get_value(
+                "Purchase Receipt Item",
+                pr_detail,
+                ["amount", "item_code"],
+                as_dict=True,
+            ) or {}
+
+            pr_amount = flt(pr_data.get("amount") or 0)
+            item_code = entry.item_code or pr_data.get("item_code")
+            allowance = get_allowance_for(item_code, {}, None, None, "amount")[0] if item_code else 0
+            max_allowed = flt(pr_amount * (100 + flt(allowance)) / 100)
+
+            already_billed_query = (
+                frappe.qb.from_(pii)
+                .select(Sum(pii.amount))
+                .where((pii.pr_detail == pr_detail) & (pii.docstatus == 1) & (pii.parent != (doc.name or "")))
+            ).run()
+            already_billed = flt(already_billed_query[0][0]) if already_billed_query and already_billed_query[0] else 0
+
+            projected_total = flt(already_billed + flt(entry.current_total))
+            over_by = flt(projected_total - max_allowed)
+
+            snapshot_rows.append(
+                {
+                    "pr_detail": pr_detail,
+                    "item_code": item_code,
+                    "rows": entry.rows,
+                    "pr_amount": pr_amount,
+                    "allowance_percent": flt(allowance),
+                    "max_allowed": max_allowed,
+                    "already_billed_submitted": already_billed,
+                    "current_doc_total_for_pr_detail": flt(entry.current_total),
+                    "projected_total": projected_total,
+                    "over_by": over_by,
+                }
+            )
+
+        log_purchase_invoice_error(
+            doc,
+            doc.items[0] if doc.items else None,
+            "Pre-Validate Overbilling Snapshot",
+            "Snapshot of values before ERPNext validate_multiple_billing.",
+            {
+                "doc": doc.name or "New",
+                "currency": doc.currency,
+                "rows": snapshot_rows,
+            },
+        )
+        _pi_debug_print(
+            "pre_validate_overbilling_snapshot",
+            {"doc": doc.name or "New", "rows": snapshot_rows},
+        )
+    except Exception as e:
+        log_purchase_invoice_error(
+            doc,
+            doc.items[0] if doc.items else None,
+            "Pre-Validate Snapshot Failed",
+            f"Failed to capture pre-validate overbilling snapshot: {str(e)}",
+            {"traceback": frappe.get_traceback()},
+        )
 
 
 def preserve_po_rate(doc, method):
