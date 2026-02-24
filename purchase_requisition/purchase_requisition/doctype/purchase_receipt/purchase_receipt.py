@@ -1,5 +1,16 @@
 import frappe
 from frappe.utils import flt
+import json
+
+
+def _pr_debug_print(label, payload=None):
+    try:
+        if payload is None:
+            print(f"[PR-DEBUG] {label}")
+        else:
+            print(f"[PR-DEBUG] {label}: {json.dumps(payload, default=str)}")
+    except Exception:
+        print(f"[PR-DEBUG] {label}: {payload}")
 
 
 def _copy_po_item_fields(po_item, receipt_item):
@@ -77,6 +88,22 @@ def _recalculate_item_totals(receipt_item, source_rate, conversion_rate):
     receipt_item.base_net_rate = receipt_item.base_rate
     receipt_item.base_net_amount = receipt_item.base_amount
 
+    _pr_debug_print(
+        "recalculate_pr_item_totals",
+        {
+            "pr_row_idx": getattr(receipt_item, "idx", None),
+            "qty": qty,
+            "source_rate": gross_rate,
+            "price_list_rate": flt(getattr(receipt_item, "price_list_rate", 0)),
+            "rate": flt(getattr(receipt_item, "rate", 0)),
+            "amount": flt(getattr(receipt_item, "amount", 0)),
+            "custom_gross_rate": flt(getattr(receipt_item, "custom_gross_rate", 0)),
+            "custom_discount_": flt(getattr(receipt_item, "custom_discount_", 0)),
+            "custom_discounted_amount": flt(getattr(receipt_item, "custom_discounted_amount", 0)),
+            "custom_net_total": flt(getattr(receipt_item, "custom_net_total", 0)),
+        },
+    )
+
 
 def get_pr_in_grn(doc, method):
     meta = frappe.get_meta("Purchase Receipt Item")
@@ -93,6 +120,23 @@ def get_pr_in_grn(doc, method):
         _copy_po_item_fields(purchase_order_ref, i)
         source_rate = purchase_order_ref.rate or i.rate
         _recalculate_item_totals(i, source_rate, conversion_rate)
+
+        _pr_debug_print(
+            "apply_po_fields_on_pr_item",
+            {
+                "pr": doc.name or "New",
+                "pr_row_idx": i.idx,
+                "po_item": i.purchase_order_item,
+                "qty": flt(i.qty or 0),
+                "price_list_rate": flt(getattr(i, "price_list_rate", 0)),
+                "rate": flt(getattr(i, "rate", 0)),
+                "amount": flt(getattr(i, "amount", 0)),
+                "custom_gross_rate": flt(getattr(i, "custom_gross_rate", 0)),
+                "custom_discount_": flt(getattr(i, "custom_discount_", 0)),
+                "custom_discounted_amount": flt(getattr(i, "custom_discounted_amount", 0)),
+                "custom_net_total": flt(getattr(i, "custom_net_total", 0)),
+            },
+        )
 
         frappe.db.commit()
 

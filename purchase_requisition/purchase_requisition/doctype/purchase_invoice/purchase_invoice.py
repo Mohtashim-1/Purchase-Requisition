@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import money_in_words
+from frappe.utils import money_in_words, flt
 from frappe.model.mapper import get_mapped_doc
 import json
 
@@ -105,7 +105,18 @@ def preserve_pr_amount(doc, method):
                 pr_item_data = frappe.db.get_value(
                     "Purchase Receipt Item",
                     pr_detail,
-                    ["amount", "qty", "rate", "received_qty", "billed_amt"],
+                    [
+                        "amount",
+                        "qty",
+                        "rate",
+                        "received_qty",
+                        "billed_amt",
+                        "purchase_order_item",
+                        "price_list_rate",
+                        "discount_percentage",
+                        "discount_amount",
+                        "custom_discount_",
+                    ],
                     as_dict=True
                 )
                 
@@ -114,6 +125,15 @@ def preserve_pr_amount(doc, method):
                     pr_qty = flt(pr_item_data.get("qty", 0))
                     pr_received_qty = flt(pr_item_data.get("received_qty", 0))
                     pr_billed_amt = flt(pr_item_data.get("billed_amt", 0))
+                    pr_rate = flt(pr_item_data.get("rate", 0))
+                    pr_price_list_rate = flt(pr_item_data.get("price_list_rate", 0))
+                    pr_discount_pct = flt(
+                        pr_item_data.get("custom_discount_")
+                        if pr_item_data.get("custom_discount_") is not None
+                        else pr_item_data.get("discount_percentage", 0)
+                    )
+                    pr_discount_amt = flt(pr_item_data.get("discount_amount", 0))
+                    po_detail = pr_item_data.get("purchase_order_item")
                     
                     # Check for already billed amount
                     # CRITICAL: Replicate ERPNext's get_billed_amount_for_item logic EXACTLY
@@ -238,16 +258,47 @@ def preserve_pr_amount(doc, method):
                     # Set the amount
                     item.amount = correct_amount
 
-                    # Keep rate/base_rate aligned with preserved PR amount.
-                    # ERPNext can recompute amount = qty * rate during validation.
-                    qty = flt(item.qty or 0)
-                    if qty:
-                        net_rate = flt(correct_amount / qty, item.precision("rate"))
-                        item.rate = net_rate
+                    # Keep PI amount safe for ERPNext overbilling validation:
+                    # - PI amount is always net and must stay equal to PR remaining net amount
+                    # - PI rate must be net-rate-like so ERPNext internal recompute does not inflate amount
+                    # - store PO-like gross rate in price_list_rate for UI/comparison
+                    rate_precision = item.precision("rate") if hasattr(item, "precision") else 6
+                    qty_precision = item.precision("qty") if hasattr(item, "precision") else 6
+                    source_gross_rate = flt(pr_price_list_rate, rate_precision)
+                    source_net_rate = flt(pr_rate, rate_precision)
+
+                    if po_detail:
+                        po_rate = frappe.db.get_value("Purchase Order Item", po_detail, "rate")
+                        source_gross_rate = flt(po_rate, rate_precision) or source_gross_rate
+
+                    if source_net_rate:
+                        item.rate = source_net_rate
                         if hasattr(item, "base_rate"):
-                            item.base_rate = net_rate
-                        if hasattr(item, "base_amount"):
-                            item.base_amount = flt(correct_amount, item.precision("base_amount"))
+                            item.base_rate = source_net_rate
+
+                        item.qty = flt(pr_qty or item.qty or 0, qty_precision)
+                        if hasattr(item, "stock_qty"):
+                            item.stock_qty = flt(item.qty) * flt(item.conversion_factor or 1)
+                    else:
+                        # Fallback only when source rate is unavailable.
+                        qty = flt(item.qty or 0)
+                        if qty:
+                            net_rate = flt(correct_amount / qty, rate_precision)
+                            item.rate = net_rate
+                            if hasattr(item, "base_rate"):
+                                item.base_rate = net_rate
+
+                    if hasattr(item, "base_amount"):
+                        item.base_amount = flt(correct_amount, item.precision("base_amount"))
+
+                    if hasattr(item, "price_list_rate") and source_gross_rate:
+                        item.price_list_rate = source_gross_rate
+
+                    # Preserve line-level discount fields to match PO/PR view semantics.
+                    if hasattr(item, "discount_percentage"):
+                        item.discount_percentage = pr_discount_pct
+                    if hasattr(item, "discount_amount"):
+                        item.discount_amount = pr_discount_amt
 
                     _pi_debug_print(
                         "preserve_pr_amount row",
@@ -258,6 +309,11 @@ def preserve_pr_amount(doc, method):
                             "current_amount_before": current_amount,
                             "set_amount": item.amount,
                             "set_rate": item.rate,
+                            "set_qty": item.qty,
+                            "price_list_rate_set": getattr(item, "price_list_rate", None),
+                            "source_gross_rate": source_gross_rate,
+                            "source_net_rate": source_net_rate,
+                            "expected_amount_from_qty_rate": flt(flt(item.qty or 0) * flt(item.rate or 0), amount_precision),
                             "pr_amount": pr_amount,
                             "already_billed": already_billed,
                             "remaining_amount": remaining_amount,
@@ -467,6 +523,24 @@ def debug_validate_multiple_billing(doc, method):
             # Get PR amount
             pr_amount = frappe.db.get_value("Purchase Receipt Item", pr_detail, "amount") or 0
             pr_amount = flt(pr_amount)
+            _pi_debug_print(
+                "validate_multiple_billing_row_state",
+                {
+                    "doc": doc.name or "New",
+                    "idx": item.idx,
+                    "pr_detail": pr_detail,
+                    "qty": flt(item.qty or 0),
+                    "rate": flt(item.rate or 0),
+                    "price_list_rate": flt(getattr(item, "price_list_rate", 0) or 0),
+                    "discount_percentage": flt(getattr(item, "discount_percentage", 0) or 0),
+                    "discount_amount": flt(getattr(item, "discount_amount", 0) or 0),
+                    "amount": current_amount,
+                    "qty_x_rate": flt(flt(item.qty or 0) * flt(item.rate or 0)),
+                    "already_billed_erpnext": already_billed_erpnext,
+                    "pr_amount": pr_amount,
+                    "projected_total": total_billed,
+                },
+            )
             
             if total_billed > pr_amount * 1.01:  # With 1% allowance
                 log_purchase_invoice_error(
@@ -517,32 +591,64 @@ def calculation_pi(doc, method):
                     except:
                         pr_amount = None
             
-            # Calculate gross total (qty * rate)
-            if not i.custom_gross_total or i.custom_gross_total == 0:
-                i.custom_gross_total = flt(i.qty) * flt(i.rate)
-            else:
-                # Ensure it's recalculated if qty or rate changed
-                calculated_gross = flt(i.qty) * flt(i.rate)
-                if abs(flt(i.custom_gross_total) - calculated_gross) > 0.01:
-                    i.custom_gross_total = calculated_gross
+            # For PR-linked items, preserve mapped gross/discount/net from PR.
+            # PR carries gross at price_list_rate while PI `rate` is net rate.
+            if is_from_pr and i.get("pr_detail"):
+                pr_custom = frappe.db.get_value(
+                    "Purchase Receipt Item",
+                    i.pr_detail,
+                    ["custom_gross_rate", "custom_discounted_amount", "custom_discount_", "custom_net_total"],
+                    as_dict=True,
+                ) or {}
 
-            # Calculate discount - prioritize percentage if both exist
-            if i.custom_discount_percentage and i.custom_discount_percentage != 0:
-                # Recalculate discounted amount from percentage
-                i.custom_discounted_amount = flt((flt(i.custom_discount_percentage) / 100) * flt(i.custom_gross_total))
-            elif i.custom_discounted_amount and i.custom_discounted_amount != 0:
-                # Calculate percentage from amount
-                if i.custom_gross_total and i.custom_gross_total != 0:
-                    i.custom_discount_percentage = flt((flt(i.custom_discounted_amount) / flt(i.custom_gross_total)) * 100)
+                if flt(pr_custom.get("custom_gross_rate")):
+                    i.custom_gross_total = flt(pr_custom.get("custom_gross_rate"))
+
+                if flt(pr_custom.get("custom_discounted_amount")):
+                    i.custom_discounted_amount = flt(pr_custom.get("custom_discounted_amount"))
+
+                if pr_custom.get("custom_discount_") is not None:
+                    i.custom_discount_percentage = flt(pr_custom.get("custom_discount_"))
+
+                if flt(pr_custom.get("custom_net_total")):
+                    i.custom_net_amount = flt(pr_custom.get("custom_net_total"))
+
+            # Calculate gross total for non-PR items (qty * rate).
+            if not is_from_pr:
+                if not i.custom_gross_total or i.custom_gross_total == 0:
+                    i.custom_gross_total = flt(i.qty) * flt(i.rate)
                 else:
-                    i.custom_discount_percentage = 0
-            else:
-                # Both missing, set to 0
-                i.custom_discounted_amount = 0
-                i.custom_discount_percentage = 0
+                    # Ensure it's recalculated if qty or rate changed
+                    calculated_gross = flt(i.qty) * flt(i.rate)
+                    if abs(flt(i.custom_gross_total) - calculated_gross) > 0.01:
+                        i.custom_gross_total = calculated_gross
 
-            # Calculate net amount for display/calculation purposes
-            i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount)
+            # Calculate discount/net for non-PR items.
+            # For PR items, preserve exact mapped PR totals to avoid rounding drift.
+            if not is_from_pr:
+                if i.custom_discount_percentage and i.custom_discount_percentage != 0:
+                    # Recalculate discounted amount from percentage
+                    i.custom_discounted_amount = flt((flt(i.custom_discount_percentage) / 100) * flt(i.custom_gross_total))
+                elif i.custom_discounted_amount and i.custom_discounted_amount != 0:
+                    # Calculate percentage from amount
+                    if i.custom_gross_total and i.custom_gross_total != 0:
+                        i.custom_discount_percentage = flt((flt(i.custom_discounted_amount) / flt(i.custom_gross_total)) * 100)
+                    else:
+                        i.custom_discount_percentage = 0
+                else:
+                    # Both missing, set to 0
+                    i.custom_discounted_amount = 0
+                    i.custom_discount_percentage = 0
+
+                # Calculate net amount for display/calculation purposes
+                i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount)
+            else:
+                if not i.custom_gross_total:
+                    i.custom_gross_total = flt(i.qty) * flt(getattr(i, "price_list_rate", 0) or 0)
+                if i.custom_discounted_amount is None:
+                    i.custom_discounted_amount = 0
+                if not i.custom_net_amount:
+                    i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount)
             
             # CRITICAL: Preserve amount field when item is from Purchase Receipt
             # The over-billing validation compares PI amount against PR amount
@@ -563,6 +669,8 @@ def calculation_pi(doc, method):
                         }
                     )
                 # DO NOT change i.amount - it's already set correctly
+                # For PR rows, keep displayed custom net aligned with billed amount.
+                i.custom_net_amount = flt(i.amount)
             elif is_from_pr and pr_amount is not None:
                 # For items from PR: Use the EXACT amount from Purchase Receipt
                 # This is what the over-billing validation expects
@@ -687,6 +795,23 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
             if not target_item.amount or target_item.amount == 0:
                 target_item.amount = target_item.custom_net_amount
             # Otherwise, keep the amount from PR (which is correct for validation)
+
+        _pi_debug_print(
+            "map_pr_to_pi_item",
+            {
+                "pr_name": source_parent.name if source_parent else None,
+                "pr_item": getattr(source_item, "name", None),
+                "pi_row_idx": getattr(target_item, "idx", None),
+                "qty": flt(getattr(target_item, "qty", 0)),
+                "rate": flt(getattr(target_item, "rate", 0)),
+                "price_list_rate": flt(getattr(target_item, "price_list_rate", 0) or 0),
+                "amount": flt(getattr(target_item, "amount", 0)),
+                "custom_gross_total": flt(getattr(target_item, "custom_gross_total", 0)),
+                "custom_discounted_amount": flt(getattr(target_item, "custom_discounted_amount", 0)),
+                "custom_discount_percentage": flt(getattr(target_item, "custom_discount_percentage", 0)),
+                "custom_net_amount": flt(getattr(target_item, "custom_net_amount", 0)),
+            },
+        )
 
     return get_mapped_doc(
         "Purchase Receipt",

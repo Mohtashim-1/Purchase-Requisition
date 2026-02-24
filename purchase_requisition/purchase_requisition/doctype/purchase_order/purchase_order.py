@@ -1,6 +1,17 @@
 import frappe
 from frappe.model.mapper import get_mapped_doc
 from frappe.utils import flt
+import json
+
+
+def _po_debug_print(label, payload=None):
+    try:
+        if payload is None:
+            print(f"[PO-DEBUG] {label}")
+        else:
+            print(f"[PO-DEBUG] {label}: {json.dumps(payload, default=str)}")
+    except Exception:
+        print(f"[PO-DEBUG] {label}: {payload}")
 
 def hello_world(doc, method):
     for i in doc.items:
@@ -128,6 +139,24 @@ def make_purchase_receipt_custom(source_name, target_doc=None):
             target.base_net_rate = net_rate_value * flt(source_parent.conversion_rate)
         if pr_item_meta.has_field("base_net_amount"):
             target.base_net_amount = net_amount_value * flt(source_parent.conversion_rate)
+
+        _po_debug_print(
+            "map_po_to_pr_item",
+            {
+                "po": getattr(source_parent, "name", None),
+                "po_item": getattr(obj, "name", None),
+                "pr_row_idx": getattr(target, "idx", None),
+                "remaining_qty": remaining_qty,
+                "po_rate": flt(getattr(obj, "rate", 0)),
+                "pr_price_list_rate": flt(getattr(target, "price_list_rate", 0)),
+                "pr_rate": flt(getattr(target, "rate", 0)),
+                "pr_amount": flt(getattr(target, "amount", 0)),
+                "gross_total": flt(getattr(target, "custom_gross_rate", 0)),
+                "discount_pct": flt(getattr(target, "custom_discount_", 0)),
+                "discount_total": flt(getattr(target, "custom_discounted_amount", 0)),
+                "net_total": flt(getattr(target, "custom_net_total", 0)),
+            },
+        )
 
     return get_mapped_doc(
         "Purchase Order",
