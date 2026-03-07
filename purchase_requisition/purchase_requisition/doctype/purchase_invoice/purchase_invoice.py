@@ -591,8 +591,14 @@ def calculation_pi(doc, method):
                     except:
                         pr_amount = None
             
-            # For PR-linked items, preserve mapped gross/discount/net from PR.
-            # PR carries gross at price_list_rate while PI `rate` is net rate.
+            # Always calculate gross total: qty * rate = custom_gross_total
+            # This applies to both PR and non-PR items
+            calculated_gross = flt(i.qty) * flt(i.rate)
+            i.custom_gross_total = calculated_gross
+            
+            # For PR-linked items, check if user has manually edited discount
+            # If edited, use edited values; otherwise preserve from PR
+            discount_edited = False
             if is_from_pr and i.get("pr_detail"):
                 pr_custom = frappe.db.get_value(
                     "Purchase Receipt Item",
@@ -601,35 +607,37 @@ def calculation_pi(doc, method):
                     as_dict=True,
                 ) or {}
 
-                if flt(pr_custom.get("custom_gross_rate")):
-                    i.custom_gross_total = flt(pr_custom.get("custom_gross_rate"))
+                pr_discount_pct = flt(pr_custom.get("custom_discount_")) if pr_custom.get("custom_discount_") is not None else 0
+                pr_discount_amt = flt(pr_custom.get("custom_discounted_amount", 0))
+                
+                # Check if user has edited discount (compare current values with PR values)
+                current_discount_pct = flt(i.custom_discount_percentage) if i.custom_discount_percentage is not None else 0
+                current_discount_amt = flt(i.custom_discounted_amount) if i.custom_discounted_amount is not None else 0
+                
+                # If discount values differ from PR, assume user edited them
+                if abs(current_discount_pct - pr_discount_pct) > 0.01 or abs(current_discount_amt - pr_discount_amt) > 0.01:
+                    discount_edited = True
+                
+                # If discount was not edited, preserve from PR
+                if not discount_edited:
+                    if pr_discount_amt:
+                        i.custom_discounted_amount = pr_discount_amt
+                    else:
+                        i.custom_discounted_amount = 0
 
-                if flt(pr_custom.get("custom_discounted_amount")):
-                    i.custom_discounted_amount = flt(pr_custom.get("custom_discounted_amount"))
+                    if pr_discount_pct is not None:
+                        i.custom_discount_percentage = pr_discount_pct
+                    else:
+                        i.custom_discount_percentage = 0
 
-                if pr_custom.get("custom_discount_") is not None:
-                    i.custom_discount_percentage = flt(pr_custom.get("custom_discount_"))
-
-                if flt(pr_custom.get("custom_net_total")):
-                    i.custom_net_amount = flt(pr_custom.get("custom_net_total"))
-
-            # Calculate gross total for non-PR items (qty * rate).
-            if not is_from_pr:
-                if not i.custom_gross_total or i.custom_gross_total == 0:
-                    i.custom_gross_total = flt(i.qty) * flt(i.rate)
-                else:
-                    # Ensure it's recalculated if qty or rate changed
-                    calculated_gross = flt(i.qty) * flt(i.rate)
-                    if abs(flt(i.custom_gross_total) - calculated_gross) > 0.01:
-                        i.custom_gross_total = calculated_gross
-
-            # Calculate discount/net for non-PR items.
-            # For PR items, preserve exact mapped PR totals to avoid rounding drift.
-            if not is_from_pr:
-                if i.custom_discount_percentage and i.custom_discount_percentage != 0:
+            # Calculate discount/net: custom_gross_total - custom_discounted_amount = custom_net_amount
+            # For non-PR items or PR items with edited discount, recalculate based on user input
+            if not is_from_pr or discount_edited:
+                # Recalculate discount based on user input
+                if i.custom_discount_percentage is not None and i.custom_discount_percentage != 0:
                     # Recalculate discounted amount from percentage
                     i.custom_discounted_amount = flt((flt(i.custom_discount_percentage) / 100) * flt(i.custom_gross_total))
-                elif i.custom_discounted_amount and i.custom_discounted_amount != 0:
+                elif i.custom_discounted_amount is not None and i.custom_discounted_amount != 0:
                     # Calculate percentage from amount
                     if i.custom_gross_total and i.custom_gross_total != 0:
                         i.custom_discount_percentage = flt((flt(i.custom_discounted_amount) / flt(i.custom_gross_total)) * 100)
@@ -640,65 +648,112 @@ def calculation_pi(doc, method):
                     i.custom_discounted_amount = 0
                     i.custom_discount_percentage = 0
 
-                # Calculate net amount for display/calculation purposes
-                i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount)
-            else:
-                if not i.custom_gross_total:
-                    i.custom_gross_total = flt(i.qty) * flt(getattr(i, "price_list_rate", 0) or 0)
-                if i.custom_discounted_amount is None:
-                    i.custom_discounted_amount = 0
-                if not i.custom_net_amount:
-                    i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount)
+            # Always calculate net amount: custom_gross_total - custom_discounted_amount = custom_net_amount
+            i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount or 0)
             
-            # CRITICAL: Preserve amount field when item is from Purchase Receipt
-            # The over-billing validation compares PI amount against PR amount
-            # We must NEVER change the amount if it was preserved in before_validate
+            # CRITICAL: Set amount = custom_net_amount (custom_net_amount = amount)
+            # But for PR items, validate against PR constraints to avoid over-billing
+            calculated_amount = flt(i.custom_net_amount)
+            
             if hasattr(i, '_pr_amount_preserved') and i._pr_amount_preserved:
-                # Amount was already set in before_validate - DO NOT CHANGE IT
-                # Just log if there's a discrepancy for debugging
-                if abs(flt(i.amount) - flt(i.custom_net_amount)) > 0.01:
-                    log_purchase_invoice_error(
-                        doc, i, "Amount Mismatch with PR",
-                        f"Item {i.idx} from PR: PI amount ({i.amount}) differs from calculated net amount ({i.custom_net_amount}). Using PR amount for validation.",
-                        {
-                            "pr_detail": i.get("pr_detail"),
-                            "pr_amount": getattr(i, '_original_pr_amount', None),
-                            "current_amount": flt(i.amount),
-                            "calculated_net_amount": flt(i.custom_net_amount),
-                            "difference": abs(flt(i.amount) - flt(i.custom_net_amount))
-                        }
-                    )
-                # DO NOT change i.amount - it's already set correctly
-                # For PR rows, keep displayed custom net aligned with billed amount.
-                i.custom_net_amount = flt(i.amount)
+                # Amount was already set in before_validate
+                # If discount was edited, we need to update amount but respect PR constraints
+                if discount_edited:
+                    remaining_amount = getattr(i, '_remaining_amount', None)
+                    
+                    if remaining_amount is not None:
+                        # Clamp to remaining PR amount to avoid over-billing
+                        if calculated_amount > remaining_amount:
+                            i.amount = flt(remaining_amount)
+                            # Adjust custom_net_amount to match
+                            i.custom_net_amount = flt(remaining_amount)
+                            log_purchase_invoice_error(
+                                doc, i, "Discount Edit Clamped to PR Remaining",
+                                f"Item {i.idx}: Edited discount resulted in amount {calculated_amount} exceeding PR remaining {remaining_amount}. Clamped to remaining amount.",
+                                {
+                                    "pr_detail": i.get("pr_detail"),
+                                    "calculated_amount": calculated_amount,
+                                    "remaining_amount": remaining_amount,
+                                    "final_amount": i.amount
+                                }
+                            )
+                        else:
+                            i.amount = calculated_amount
+                    else:
+                        i.amount = calculated_amount
+                else:
+                    # Discount not edited - preserve PR amount for over-billing validation
+                    # But ensure custom_net_amount reflects the actual calculation
+                    if abs(flt(i.amount) - flt(i.custom_net_amount)) > 0.01:
+                        log_purchase_invoice_error(
+                            doc, i, "Amount Mismatch with PR",
+                            f"Item {i.idx} from PR: PI amount ({i.amount}) differs from calculated net amount ({i.custom_net_amount}). Using PR amount for validation.",
+                            {
+                                "pr_detail": i.get("pr_detail"),
+                                "pr_amount": getattr(i, '_original_pr_amount', None),
+                                "current_amount": flt(i.amount),
+                                "calculated_net_amount": flt(i.custom_net_amount),
+                                "difference": abs(flt(i.amount) - flt(i.custom_net_amount))
+                            }
+                        )
+                    # For PR items without discount edit, keep amount as set (for over-billing validation)
+                    # But update custom_net_amount to match for display consistency
+                    i.custom_net_amount = flt(i.amount)
             elif is_from_pr and pr_amount is not None:
-                # For items from PR: Use the EXACT amount from Purchase Receipt
-                # This is what the over-billing validation expects
-                i.amount = pr_amount
-                
-                # Log if there's a discrepancy for debugging
-                if abs(flt(i.amount) - flt(i.custom_net_amount)) > 0.01:
-                    log_purchase_invoice_error(
-                        doc, i, "Amount Mismatch with PR",
-                        f"Item {i.idx} from PR: PI amount ({i.amount}) differs from calculated net amount ({i.custom_net_amount}). Using PR amount for validation.",
-                        {
-                            "pr_detail": i.get("pr_detail"),
-                            "pr_amount": pr_amount,
-                            "calculated_net_amount": flt(i.custom_net_amount),
-                            "difference": abs(flt(i.amount) - flt(i.custom_net_amount))
-                        }
-                    )
+                # For items from PR: Check if discount was edited
+                if discount_edited:
+                    # User edited discount - use calculated net amount but validate against PR
+                    remaining_amount = None
+                    if hasattr(i, '_remaining_amount'):
+                        remaining_amount = i._remaining_amount
+                    else:
+                        # Calculate remaining amount
+                        already_billed = getattr(i, '_already_billed', 0)
+                        remaining_amount = flt(pr_amount - already_billed)
+                    
+                    if remaining_amount is not None and calculated_amount > remaining_amount:
+                        i.amount = flt(remaining_amount)
+                        i.custom_net_amount = flt(remaining_amount)
+                        log_purchase_invoice_error(
+                            doc, i, "Discount Edit Clamped to PR Remaining",
+                            f"Item {i.idx}: Edited discount resulted in amount {calculated_amount} exceeding PR remaining {remaining_amount}. Clamped to remaining amount.",
+                            {
+                                "pr_detail": i.get("pr_detail"),
+                                "calculated_amount": calculated_amount,
+                                "remaining_amount": remaining_amount,
+                                "final_amount": i.amount
+                            }
+                        )
+                    else:
+                        i.amount = calculated_amount
+                else:
+                    # Discount not edited - use PR amount for over-billing validation
+                    i.amount = pr_amount
+                    # Update custom_net_amount to match for consistency
+                    i.custom_net_amount = flt(pr_amount)
+                    # Log if there's a discrepancy for debugging
+                    if abs(flt(i.amount) - calculated_amount) > 0.01:
+                        log_purchase_invoice_error(
+                            doc, i, "Amount Mismatch with PR",
+                            f"Item {i.idx} from PR: PI amount ({i.amount}) differs from calculated net amount ({calculated_amount}). Using PR amount for validation.",
+                            {
+                                "pr_detail": i.get("pr_detail"),
+                                "pr_amount": pr_amount,
+                                "calculated_net_amount": calculated_amount,
+                                "difference": abs(flt(i.amount) - calculated_amount)
+                            }
+                        )
             elif is_from_pr and pr_amount is None:
-                # PR item but couldn't get PR amount - log error
+                # PR item but couldn't get PR amount - use calculated amount
                 log_purchase_invoice_error(
                     doc, i, "Cannot Get PR Amount",
                     f"Item {i.idx} has pr_detail but couldn't fetch PR amount. Using calculated amount.",
-                    {"pr_detail": i.get("pr_detail"), "calculated_net_amount": flt(i.custom_net_amount)}
+                    {"pr_detail": i.get("pr_detail"), "calculated_net_amount": calculated_amount}
                 )
-                i.amount = flt(i.custom_net_amount)
+                i.amount = calculated_amount
             else:
-                # For new items or items not from PR, use custom_net_amount
-                i.amount = flt(i.custom_net_amount)
+                # For new items or items not from PR: custom_net_amount = amount
+                i.amount = calculated_amount
 
             # Accumulate totals
             gross_total += flt(i.custom_gross_total)
