@@ -260,8 +260,8 @@ def preserve_pr_amount(doc, method):
 
                     # Keep PI amount safe for ERPNext overbilling validation:
                     # - PI amount is always net and must stay equal to PR remaining net amount
-                    # - PI rate must be net-rate-like so ERPNext internal recompute does not inflate amount
-                    # - store PO-like gross rate in price_list_rate for UI/comparison
+                    # - PI visible rate should follow the gross/source rate the user expects to see
+                    # - store the same gross/source rate in price_list_rate for consistency
                     rate_precision = item.precision("rate") if hasattr(item, "precision") else 6
                     qty_precision = item.precision("qty") if hasattr(item, "precision") else 6
                     source_gross_rate = flt(pr_price_list_rate, rate_precision)
@@ -271,22 +271,24 @@ def preserve_pr_amount(doc, method):
                         po_rate = frappe.db.get_value("Purchase Order Item", po_detail, "rate")
                         source_gross_rate = flt(po_rate, rate_precision) or source_gross_rate
 
-                    if source_net_rate:
-                        item.rate = source_net_rate
+                    display_rate = source_gross_rate or source_net_rate
+
+                    if display_rate:
+                        item.rate = display_rate
                         if hasattr(item, "base_rate"):
-                            item.base_rate = source_net_rate
+                            item.base_rate = display_rate
 
                         item.qty = flt(pr_qty or item.qty or 0, qty_precision)
                         if hasattr(item, "stock_qty"):
                             item.stock_qty = flt(item.qty) * flt(item.conversion_factor or 1)
                     else:
-                        # Fallback only when source rate is unavailable.
+                        # Fallback only when both gross and net source rates are unavailable.
                         qty = flt(item.qty or 0)
                         if qty:
-                            net_rate = flt(correct_amount / qty, rate_precision)
-                            item.rate = net_rate
+                            fallback_rate = flt(correct_amount / qty, rate_precision)
+                            item.rate = fallback_rate
                             if hasattr(item, "base_rate"):
-                                item.base_rate = net_rate
+                                item.base_rate = fallback_rate
 
                     if hasattr(item, "base_amount"):
                         item.base_amount = flt(correct_amount, item.precision("base_amount"))
@@ -313,6 +315,7 @@ def preserve_pr_amount(doc, method):
                             "price_list_rate_set": getattr(item, "price_list_rate", None),
                             "source_gross_rate": source_gross_rate,
                             "source_net_rate": source_net_rate,
+                            "display_rate": display_rate,
                             "expected_amount_from_qty_rate": flt(flt(item.qty or 0) * flt(item.rate or 0), amount_precision),
                             "pr_amount": pr_amount,
                             "already_billed": already_billed,
@@ -825,6 +828,18 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
         Purchase Invoice uses: custom_gross_total, custom_discount_percentage, custom_net_amount
         """
         # Map from PR fields to PI fields
+        source_visible_rate = flt(getattr(source_item, "price_list_rate", 0) or 0)
+        if not source_visible_rate:
+            source_visible_rate = flt(getattr(source_item, "rate", 0) or 0)
+
+        if source_visible_rate:
+            target_item.rate = source_visible_rate
+            if hasattr(target_item, "base_rate"):
+                target_item.base_rate = source_visible_rate
+
+        if hasattr(target_item, "price_list_rate") and source_visible_rate:
+            target_item.price_list_rate = source_visible_rate
+
         if hasattr(source_item, "custom_gross_rate") and source_item.custom_gross_rate:
             target_item.custom_gross_total = source_item.custom_gross_rate
         
