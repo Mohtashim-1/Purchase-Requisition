@@ -574,6 +574,9 @@ def calculation_pi(doc, method):
         net_total = 0
 
         for i in doc.items:
+            original_rate = flt(i.rate)
+            original_base_rate = flt(i.base_rate) if hasattr(i, "base_rate") else None
+
             # Check if this item is linked to Purchase Receipt
             is_from_pr = bool(i.get("pr_detail"))
             
@@ -754,6 +757,11 @@ def calculation_pi(doc, method):
             else:
                 # For new items or items not from PR: custom_net_amount = amount
                 i.amount = calculated_amount
+
+            # Keep the user/PR-selected rate stable when only discount fields change.
+            i.rate = original_rate
+            if original_base_rate is not None and hasattr(i, "base_rate"):
+                i.base_rate = original_base_rate
 
             # Accumulate totals
             gross_total += flt(i.custom_gross_total)
