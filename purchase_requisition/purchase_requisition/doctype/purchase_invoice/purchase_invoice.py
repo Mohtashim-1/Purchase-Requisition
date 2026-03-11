@@ -817,9 +817,10 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
     def postprocess(source_doc, target_doc):
         target_doc.ignore_pricing_rule = 1
         target_doc.run_method("set_missing_values")
-        # Run custom calculation to ensure all fields are calculated correctly
-        calculation_pi(target_doc, "validate")
+        # Run ERPNext totals first because it may recompute amount from qty * rate.
         target_doc.run_method("calculate_taxes_and_totals")
+        # Re-apply custom line logic last so amount stays equal to net amount.
+        calculation_pi(target_doc, "validate")
 
     def set_missing_discount_fields(source_item, target_item, source_parent):
         """
