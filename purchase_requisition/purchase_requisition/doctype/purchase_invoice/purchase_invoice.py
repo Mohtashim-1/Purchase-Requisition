@@ -115,24 +115,35 @@ def preserve_pr_amount(doc, method):
                         "price_list_rate",
                         "discount_percentage",
                         "discount_amount",
+                        "custom_gross_rate",
+                        "custom_discounted_amount",
+                        "custom_net_total",
                         "custom_discount_",
                     ],
                     as_dict=True
                 )
                 
                 if pr_item_data and pr_item_data.get("amount") is not None:
-                    pr_amount = flt(pr_item_data.get("amount"))
+                    pr_net_amount = pr_item_data.get("custom_net_total")
+                    pr_amount = flt(
+                        pr_net_amount if pr_net_amount is not None else pr_item_data.get("amount")
+                    )
                     pr_qty = flt(pr_item_data.get("qty", 0))
                     pr_received_qty = flt(pr_item_data.get("received_qty", 0))
                     pr_billed_amt = flt(pr_item_data.get("billed_amt", 0))
                     pr_rate = flt(pr_item_data.get("rate", 0))
                     pr_price_list_rate = flt(pr_item_data.get("price_list_rate", 0))
+                    pr_custom_gross_total = flt(pr_item_data.get("custom_gross_rate", 0))
                     pr_discount_pct = flt(
                         pr_item_data.get("custom_discount_")
                         if pr_item_data.get("custom_discount_") is not None
                         else pr_item_data.get("discount_percentage", 0)
                     )
-                    pr_discount_amt = flt(pr_item_data.get("discount_amount", 0))
+                    pr_discount_amt = flt(
+                        pr_item_data.get("custom_discounted_amount")
+                        if pr_item_data.get("custom_discounted_amount") is not None
+                        else pr_item_data.get("discount_amount", 0)
+                    )
                     po_detail = pr_item_data.get("purchase_order_item")
                     
                     # Check for already billed amount
@@ -295,6 +306,12 @@ def preserve_pr_amount(doc, method):
 
                     if hasattr(item, "price_list_rate") and source_gross_rate:
                         item.price_list_rate = source_gross_rate
+
+                    if pr_custom_gross_total:
+                        item.custom_gross_total = pr_custom_gross_total
+                    if pr_discount_amt or pr_discount_amt == 0:
+                        item.custom_discounted_amount = pr_discount_amt
+                    item.custom_net_amount = correct_amount
 
                     # Preserve line-level discount fields to match PO/PR view semantics.
                     if hasattr(item, "discount_percentage"):
@@ -812,6 +829,56 @@ def calculation_pi(doc, method):
         # Re-raise to prevent silent failures
         raise
 
+
+def finalize_pi_amounts(doc, method):
+    gross_total = 0
+    discount_total = 0
+    net_total = 0
+
+    for item in doc.items:
+        gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * flt(item.rate))
+        discount_total_value = flt(item.custom_discounted_amount)
+        net_amount_value = gross_total_value - discount_total_value
+
+        item.custom_gross_total = gross_total_value
+        item.custom_net_amount = net_amount_value
+        item.amount = net_amount_value
+
+        if hasattr(item, "base_amount"):
+            item.base_amount = net_amount_value
+        if hasattr(item, "net_amount"):
+            item.net_amount = net_amount_value
+        if hasattr(item, "base_net_amount"):
+            item.base_net_amount = net_amount_value
+
+        gross_total += gross_total_value
+        discount_total += discount_total_value
+        net_total += net_amount_value
+
+    doc.custom_gross_rate = gross_total
+    doc.custom_discounted_amount = discount_total
+    doc.custom_discounted_percentage = (discount_total / gross_total) * 100 if gross_total else 0
+    doc.custom_net_rate = net_total
+
+    if hasattr(doc, "total"):
+        doc.total = net_total
+    if hasattr(doc, "net_total"):
+        doc.net_total = net_total
+    if hasattr(doc, "base_total"):
+        doc.base_total = net_total
+    if hasattr(doc, "base_net_total"):
+        doc.base_net_total = net_total
+    if hasattr(doc, "grand_total"):
+        doc.grand_total = net_total
+    if hasattr(doc, "base_grand_total"):
+        doc.base_grand_total = net_total
+    if hasattr(doc, "rounded_total"):
+        doc.rounded_total = net_total
+    if hasattr(doc, "base_rounded_total"):
+        doc.base_rounded_total = net_total
+    if hasattr(doc, "outstanding_amount"):
+        doc.outstanding_amount = net_total
+
 @frappe.whitelist()
 def make_purchase_invoice_custom(source_name, target_doc=None):
     def postprocess(source_doc, target_doc):
@@ -823,7 +890,7 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
         calculation_pi(target_doc, "validate")
 
     def set_missing_discount_fields(source_item, target_item, source_parent):
-        """
+        """ 
         Map custom fields from Purchase Receipt Item to Purchase Invoice Item
         Purchase Receipt uses: custom_gross_rate, custom_discount_, custom_net_total
         Purchase Invoice uses: custom_gross_total, custom_discount_percentage, custom_net_amount

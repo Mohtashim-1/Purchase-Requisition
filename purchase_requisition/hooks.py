@@ -140,7 +140,9 @@ doc_events = {
             "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.debug_validate_multiple_billing",
             "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.calculation_pi"
         ],
-        "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate"
+        "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate",
+        "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.finalize_pi_amounts",
+        "before_submit": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.finalize_pi_amounts"
     },
     "Purchase Receipt": {
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_receipt.purchase_receipt.get_pr_in_grn"
