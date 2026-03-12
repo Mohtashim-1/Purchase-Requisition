@@ -283,8 +283,22 @@ def preserve_pr_amount(doc, method):
                         source_gross_rate = flt(po_rate, rate_precision) or source_gross_rate
 
                     display_rate = source_gross_rate or source_net_rate
+                    current_rate = flt(item.rate, rate_precision)
+                    rate_edited = bool(
+                        current_rate and (
+                            not display_rate or abs(current_rate - display_rate) > (1 / (10 ** rate_precision))
+                        )
+                    )
 
-                    if display_rate:
+                    if rate_edited:
+                        item.rate = current_rate
+                        if hasattr(item, "base_rate"):
+                            item.base_rate = current_rate
+
+                        item.qty = flt(pr_qty or item.qty or 0, qty_precision)
+                        if hasattr(item, "stock_qty"):
+                            item.stock_qty = flt(item.qty) * flt(item.conversion_factor or 1)
+                    elif display_rate:
                         item.rate = display_rate
                         if hasattr(item, "base_rate"):
                             item.base_rate = display_rate
@@ -333,6 +347,8 @@ def preserve_pr_amount(doc, method):
                             "source_gross_rate": source_gross_rate,
                             "source_net_rate": source_net_rate,
                             "display_rate": display_rate,
+                            "current_rate": current_rate,
+                            "rate_edited": rate_edited,
                             "expected_amount_from_qty_rate": flt(flt(item.qty or 0) * flt(item.rate or 0), amount_precision),
                             "pr_amount": pr_amount,
                             "already_billed": already_billed,
