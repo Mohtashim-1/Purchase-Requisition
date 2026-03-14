@@ -615,6 +615,7 @@ def calculation_pi(doc, method):
 
             # Check if this item is linked to Purchase Receipt
             is_from_pr = bool(i.get("pr_detail"))
+            rate_edited = False
             
             # CRITICAL: If amount was preserved in before_validate, use it
             # This ensures we never change the PR amount
@@ -642,19 +643,26 @@ def calculation_pi(doc, method):
                 pr_custom = frappe.db.get_value(
                     "Purchase Receipt Item",
                     i.pr_detail,
-                    ["custom_gross_rate", "custom_discounted_amount", "custom_discount_", "custom_net_total"],
+                    ["custom_gross_rate", "custom_discounted_amount", "custom_discount_", "custom_net_total", "price_list_rate", "rate", "purchase_order_item"],
                     as_dict=True,
                 ) or {}
 
                 pr_discount_pct = flt(pr_custom.get("custom_discount_")) if pr_custom.get("custom_discount_") is not None else 0
                 pr_discount_amt = flt(pr_custom.get("custom_discounted_amount", 0))
+                pr_visible_rate = flt(pr_custom.get("price_list_rate") or pr_custom.get("rate") or 0)
+                po_detail = pr_custom.get("purchase_order_item")
+                if po_detail:
+                    po_rate = frappe.db.get_value("Purchase Order Item", po_detail, "rate")
+                    pr_visible_rate = flt(po_rate) or pr_visible_rate
                 
                 # Check if user has edited discount (compare current values with PR values)
                 current_discount_pct = flt(i.custom_discount_percentage) if i.custom_discount_percentage is not None else 0
                 current_discount_amt = flt(i.custom_discounted_amount) if i.custom_discounted_amount is not None else 0
+                current_rate = flt(i.rate) if i.rate is not None else 0
+                rate_edited = bool(current_rate and pr_visible_rate and abs(current_rate - pr_visible_rate) > 0.000001)
                 
                 # If discount values differ from PR, assume user edited them
-                if abs(current_discount_pct - pr_discount_pct) > 0.01 or abs(current_discount_amt - pr_discount_amt) > 0.01:
+                if rate_edited or abs(current_discount_pct - pr_discount_pct) > 0.01 or abs(current_discount_amt - pr_discount_amt) > 0.01:
                     discount_edited = True
                 
                 # If discount was not edited, preserve from PR
@@ -687,8 +695,11 @@ def calculation_pi(doc, method):
                     i.custom_discounted_amount = 0
                     i.custom_discount_percentage = 0
 
+                if flt(i.custom_discounted_amount) > flt(i.custom_gross_total):
+                    i.custom_discounted_amount = flt(i.custom_gross_total)
+
             # Always calculate net amount: custom_gross_total - custom_discounted_amount = custom_net_amount
-            i.custom_net_amount = flt(i.custom_gross_total) - flt(i.custom_discounted_amount or 0)
+            i.custom_net_amount = max(0, flt(i.custom_gross_total) - flt(i.custom_discounted_amount or 0))
             
             # CRITICAL: Set amount = custom_net_amount (custom_net_amount = amount)
             # But for PR items, validate against PR constraints to avoid over-billing
@@ -853,10 +864,18 @@ def finalize_pi_amounts(doc, method):
 
     for item in doc.items:
         gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * flt(item.rate))
-        discount_total_value = flt(item.custom_discounted_amount)
-        net_amount_value = gross_total_value - discount_total_value
+        discount_pct_value = flt(item.custom_discount_percentage)
+
+        if discount_pct_value:
+            discount_total_value = (discount_pct_value / 100) * gross_total_value
+        else:
+            discount_total_value = flt(item.custom_discounted_amount)
+
+        discount_total_value = min(max(0, discount_total_value), gross_total_value)
+        net_amount_value = max(0, gross_total_value - discount_total_value)
 
         item.custom_gross_total = gross_total_value
+        item.custom_discounted_amount = discount_total_value
         item.custom_net_amount = net_amount_value
         item.amount = net_amount_value
 

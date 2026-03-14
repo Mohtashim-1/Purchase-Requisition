@@ -25,15 +25,14 @@ function recalculate_row_from_discount(row) {
 function recalculate_row_from_qty_or_rate(row) {
     row.custom_gross_total = pi_flt(row.qty) * pi_flt(row.rate);
 
-    if (row._discount_manually_edited) {
-        if (row.custom_discount_percentage) {
-            row.custom_discounted_amount = (pi_flt(row.custom_discount_percentage) / 100) * pi_flt(row.custom_gross_total);
-        } else if (!row.custom_discounted_amount) {
-            row.custom_discounted_amount = 0;
-        }
+    if (row.custom_discount_percentage) {
+        row.custom_discounted_amount = (pi_flt(row.custom_discount_percentage) / 100) * pi_flt(row.custom_gross_total);
+    } else if (!row.custom_discounted_amount) {
+        row.custom_discounted_amount = 0;
     }
 
-    row.custom_net_amount = pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount);
+    row.custom_discounted_amount = Math.min(pi_flt(row.custom_discounted_amount), pi_flt(row.custom_gross_total));
+    row.custom_net_amount = Math.max(0, pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount));
     row.amount = row.custom_net_amount;
 }
 
