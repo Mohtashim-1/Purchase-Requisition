@@ -681,8 +681,8 @@ def calculation_pi(doc, method):
             # For non-PR items or PR items with edited discount, recalculate based on user input
             if not is_from_pr or discount_edited:
                 # Recalculate discount based on user input
-                if i.custom_discount_percentage is not None and i.custom_discount_percentage != 0:
-                    # Recalculate discounted amount from percentage
+                if i.custom_discount_percentage is not None:
+                    # Recalculate discounted amount from percentage, including explicit 0%.
                     i.custom_discounted_amount = flt((flt(i.custom_discount_percentage) / 100) * flt(i.custom_gross_total))
                 elif i.custom_discounted_amount is not None and i.custom_discounted_amount != 0:
                     # Calculate percentage from amount
@@ -864,9 +864,10 @@ def finalize_pi_amounts(doc, method):
 
     for item in doc.items:
         gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * flt(item.rate))
-        discount_pct_value = flt(item.custom_discount_percentage)
+        discount_pct_value = item.custom_discount_percentage
 
-        if discount_pct_value:
+        if discount_pct_value is not None:
+            discount_pct_value = flt(discount_pct_value)
             discount_total_value = (discount_pct_value / 100) * gross_total_value
         else:
             discount_total_value = flt(item.custom_discounted_amount)

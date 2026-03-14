@@ -25,7 +25,7 @@ function recalculate_row_from_discount(row) {
 function recalculate_row_from_qty_or_rate(row) {
     row.custom_gross_total = pi_flt(row.qty) * pi_flt(row.rate);
 
-    if (row.custom_discount_percentage) {
+    if (row.custom_discount_percentage !== null && row.custom_discount_percentage !== undefined) {
         row.custom_discounted_amount = (pi_flt(row.custom_discount_percentage) / 100) * pi_flt(row.custom_gross_total);
     } else if (!row.custom_discounted_amount) {
         row.custom_discounted_amount = 0;
@@ -115,6 +115,10 @@ frappe.ui.form.on('Purchase Invoice Item', {
 
         if (row.custom_discounted_amount !== null && row.custom_discounted_amount !== undefined && row.custom_gross_total) {
             row.custom_discount_percentage = (pi_flt(row.custom_discounted_amount) / pi_flt(row.custom_gross_total)) * 100;
+            recalculate_row_from_discount(row);
+        } else if (!pi_flt(row.custom_discounted_amount)) {
+            row.custom_discounted_amount = 0;
+            row.custom_discount_percentage = 0;
             recalculate_row_from_discount(row);
         }
 
