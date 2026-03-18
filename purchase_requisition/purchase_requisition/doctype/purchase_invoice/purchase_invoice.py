@@ -896,6 +896,13 @@ def finalize_pi_amounts(doc, method):
     doc.custom_discounted_percentage = (discount_total / gross_total) * 100 if gross_total else 0
     doc.custom_net_rate = net_total
 
+    # Include taxes in grand_total so GL entries balance (debit = credit).
+    # ERPNext make_supplier_gl_entry uses grand_total/rounded_total for the supplier credit;
+    # make_tax_gl_entries posts tax debits from doc.taxes. If we set grand_total = net_total
+    # only, supplier credit would be short by tax amount → "Debit and Credit not equal".
+    total_taxes = flt(doc.total_taxes_and_charges or 0)
+    base_total_taxes = flt(doc.base_total_taxes_and_charges or 0)
+
     if hasattr(doc, "total"):
         doc.total = net_total
     if hasattr(doc, "net_total"):
@@ -904,16 +911,20 @@ def finalize_pi_amounts(doc, method):
         doc.base_total = net_total
     if hasattr(doc, "base_net_total"):
         doc.base_net_total = net_total
+
+    grand_total_val = flt(net_total) + total_taxes
+    base_grand_total_val = flt(getattr(doc, "base_net_total", net_total) or net_total) + base_total_taxes
+
     if hasattr(doc, "grand_total"):
-        doc.grand_total = net_total
+        doc.grand_total = grand_total_val
     if hasattr(doc, "base_grand_total"):
-        doc.base_grand_total = net_total
+        doc.base_grand_total = base_grand_total_val
     if hasattr(doc, "rounded_total"):
-        doc.rounded_total = net_total
+        doc.rounded_total = grand_total_val
     if hasattr(doc, "base_rounded_total"):
-        doc.base_rounded_total = net_total
+        doc.base_rounded_total = base_grand_total_val
     if hasattr(doc, "outstanding_amount"):
-        doc.outstanding_amount = net_total
+        doc.outstanding_amount = grand_total_val
 
 @frappe.whitelist()
 def make_purchase_invoice_custom(source_name, target_doc=None):
