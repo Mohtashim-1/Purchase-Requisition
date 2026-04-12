@@ -40,6 +40,13 @@ def get_columns():
 			"width": 200
 		},
 		{
+			"fieldname": "batch_no",
+			"label": "Batch No",
+			"fieldtype": "Link",
+			"options": "Batch",
+			"width": 120
+		},
+		{
 			"fieldname": "qty",
 			"label": "Quantity",
 			"fieldtype": "Float",
@@ -73,8 +80,14 @@ def get_columns():
 			"width": 150
 		},
 		{
+			"fieldname": "po_amount",
+			"label": "PO Amount",
+			"fieldtype": "Currency",
+			"width": 140
+		},
+		{
 			"fieldname": "po_total_valuation",
-			"label": "PO Total Valuation",
+			"label": "Batch Wise Amount",
 			"fieldtype": "Currency",
 			"width": 150
 		}
@@ -82,21 +95,25 @@ def get_columns():
 
 
 def get_data(filters):
-	# Default filter for target warehouse
-	target_warehouse = filters.get("target_warehouse") or "Ramswami Medical - HOM"
+	filters = filters or {}
+	target_warehouses = get_target_warehouses(filters)
 	from_date = filters.get("from_date")
 	to_date = filters.get("to_date")
 	
-	# Build conditions
 	conditions = [
 		"se.docstatus = 1",
 		"se.purpose = 'Material Transfer'",
-		"sed.t_warehouse = %(target_warehouse)s"
 	]
 	
-	params = {
-		"target_warehouse": target_warehouse
-	}
+	params = {}
+	if target_warehouses:
+		warehouse_placeholders = []
+		for idx, warehouse in enumerate(target_warehouses):
+			param_key = f"target_warehouse_{idx}"
+			params[param_key] = warehouse
+			warehouse_placeholders.append(f"%({param_key})s")
+
+		conditions.append(f"sed.t_warehouse IN ({', '.join(warehouse_placeholders)})")
 	
 	if from_date:
 		conditions.append("se.posting_date >= %(from_date)s")
@@ -115,6 +132,7 @@ def get_data(filters):
 			se.posting_date,
 			sed.item_code,
 			sed.item_name,
+			sed.batch_no,
 			sed.qty,
 			sed.uom,
 			sed.s_warehouse,
@@ -135,6 +153,7 @@ def get_data(filters):
 	# For each row, find the Purchase Order Item with custom_net_total
 	for row in data:
 		po_valuation_per_pcs = 0
+		po_amount = 0
 		po_total_valuation = 0
 		
 		# Try to get PO via po_detail first (if exists)
@@ -174,14 +193,28 @@ def get_data(filters):
 		if po_item and po_item.get("custom_net_total") and po_item.get("qty"):
 			po_qty = flt(po_item.qty, 6)
 			po_net_total = flt(po_item.custom_net_total, 6)
+			po_amount = flt(po_net_total, 2)
 			
 			if po_qty > 0:
 				po_valuation_per_pcs = flt(po_net_total / po_qty, 6)
 				po_total_valuation = flt(po_valuation_per_pcs * row.qty, 2)
 		
 		row.po_valuation_per_pcs = po_valuation_per_pcs
+		row.po_amount = po_amount
 		row.po_total_valuation = po_total_valuation
 		# Remove po_detail from output as it's not needed
 		row.pop("po_detail", None)
 	
 	return data
+
+
+def get_target_warehouses(filters):
+	target_warehouses = filters.get("target_warehouse") or ["Ramswami Medical - HOM"]
+
+	if isinstance(target_warehouses, str):
+		target_warehouses = frappe.parse_json(target_warehouses)
+
+	if isinstance(target_warehouses, str):
+		target_warehouses = [target_warehouses]
+
+	return [warehouse for warehouse in target_warehouses if warehouse]

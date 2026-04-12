@@ -142,7 +142,9 @@ doc_events = {
         ],
         "before_insert": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.preserve_po_rate",
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.finalize_pi_amounts",
-        "before_submit": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.finalize_pi_amounts"
+        "before_submit": "purchase_requisition.purchase_requisition.doctype.purchase_invoice.purchase_invoice.finalize_pi_amounts",
+        "on_submit": "purchase_requisition.purchase_requisition.doctype.purchase_valuation_adjustment.purchase_valuation_adjustment.create_adjustment_from_purchase_invoice",
+        "on_cancel": "purchase_requisition.purchase_requisition.doctype.purchase_valuation_adjustment.purchase_valuation_adjustment.cancel_adjustments_for_purchase_invoice"
     },
     "Purchase Receipt": {
         "before_save": "purchase_requisition.purchase_requisition.doctype.purchase_receipt.purchase_receipt.get_pr_in_grn"

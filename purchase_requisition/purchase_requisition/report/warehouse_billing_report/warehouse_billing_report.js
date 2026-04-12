@@ -7,9 +7,11 @@ frappe.query_reports["Warehouse Billing Report"] = {
 		{
 			"fieldname": "target_warehouse",
 			"label": __("Target Warehouse"),
-			"fieldtype": "Link",
-			"options": "Warehouse",
-			"default": "Ramswami Medical - HOM",
+			"fieldtype": "MultiSelectList",
+			"default": ["Ramswami Medical - HOM"],
+			get_data: function(txt) {
+				return frappe.db.get_link_options("Warehouse", txt);
+			},
 			"reqd": 1
 		},
 		{
