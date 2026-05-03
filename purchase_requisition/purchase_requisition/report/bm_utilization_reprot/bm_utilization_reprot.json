@@ -1,0 +1,50 @@
+{
+ "add_total_row": 1,
+ "columns": [],
+ "creation": "2026-04-29 20:30:25.648058",
+ "disable_prepared_report": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-04-29 20:32:28.166198",
+ "modified_by": "Administrator",
+ "module": "Purchase Requisition",
+ "name": "BM Utilization Reprot",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Stock Entry",
+ "report_name": "BM Utilization Reprot",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Manufacturing Manager"
+  },
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Manufacturing User"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "SWIT - Warehouse User"
+  },
+  {
+   "role": "SWIT - Warehouse Manager"
+  },
+  {
+   "role": "Auditor"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Bike Manager"
+  }
+ ]
+}

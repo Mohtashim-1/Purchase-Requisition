@@ -13,6 +13,44 @@ def _pi_debug_print(label, payload=None):
             print(f"[PI-DEBUG] {label}: {json.dumps(payload, default=str)}")
     except Exception:
         print(f"[PI-DEBUG] {label}: {payload}")
+        
+def get_source_visible_rate(pr_detail=None, po_detail=None, fallback_rate=0):
+    """Return the gross/display rate we want to show on PI rows."""
+    rate = 0
+
+    if po_detail:
+        rate = flt(frappe.db.get_value("Purchase Order Item", po_detail, "rate") or 0)
+        if rate:
+            return rate
+
+    if pr_detail:
+        pr_data = frappe.db.get_value(
+            "Purchase Receipt Item",
+            pr_detail,
+            ["price_list_rate", "custom_gross_rate", "qty", "rate", "purchase_order_item"],
+            as_dict=True,
+        ) or {}
+
+        rate = flt(pr_data.get("price_list_rate") or 0)
+        if rate:
+            return rate
+
+        gross_total = flt(pr_data.get("custom_gross_rate") or 0)
+        qty = flt(pr_data.get("qty") or 0)
+        if gross_total and qty:
+            return flt(gross_total / qty)
+
+        linked_po_detail = pr_data.get("purchase_order_item")
+        if linked_po_detail and linked_po_detail != po_detail:
+            rate = flt(frappe.db.get_value("Purchase Order Item", linked_po_detail, "rate") or 0)
+            if rate:
+                return rate
+
+        rate = flt(pr_data.get("rate") or 0)
+        if rate:
+            return rate
+
+    return flt(fallback_rate or 0)
 
 
 def log_purchase_invoice_error(doc, item, error_type, message, details=None):
@@ -57,6 +95,82 @@ def log_purchase_invoice_error(doc, item, error_type, message, details=None):
         )
 
 
+def _is_user_override_on_pr_row(doc, item):
+    """
+    Detect whether a PR-linked row has been manually edited by user input.
+    If edited, we should not force-reset values from PR defaults.
+    """
+    if not item.get("pr_detail"):
+        return False
+
+    # Existing draft row: compare with value before current save.
+    before_doc = None if doc.is_new() else doc.get_doc_before_save()
+    if before_doc and item.get("name"):
+        prev_row = next((d for d in before_doc.items if d.name == item.name), None)
+        if prev_row:
+            tracked_fields = (
+                "qty",
+                "custom_po_rate",
+                "custom_discount_percentage",
+                "custom_discounted_amount",
+                "custom_gross_total",
+                "custom_net_amount",
+                "amount",
+            )
+            tolerance = 0.000001
+            for fieldname in tracked_fields:
+                if abs(flt(getattr(item, fieldname, 0) or 0) - flt(getattr(prev_row, fieldname, 0) or 0)) > tolerance:
+                    return True
+
+    # New doc first-save: compare against PR defaults.
+    pr_data = frappe.db.get_value(
+        "Purchase Receipt Item",
+        item.pr_detail,
+        [
+            "qty",
+            "rate",
+            "price_list_rate",
+            "purchase_order_item",
+            "custom_discount_",
+            "custom_discounted_amount",
+            "custom_gross_rate",
+            "custom_net_total",
+            "amount",
+        ],
+        as_dict=True,
+    ) or {}
+
+    pr_qty = flt(pr_data.get("qty") or 0)
+    po_rate = 0
+    if pr_data.get("purchase_order_item"):
+        po_rate = flt(frappe.db.get_value("Purchase Order Item", pr_data.get("purchase_order_item"), "rate") or 0)
+    default_po_rate = flt(po_rate or pr_data.get("price_list_rate") or pr_data.get("rate") or 0)
+    default_discount_pct = flt(pr_data.get("custom_discount_") or 0)
+    default_discount_amt = flt(pr_data.get("custom_discounted_amount") or 0)
+    default_gross = flt(pr_data.get("custom_gross_rate") or (pr_qty * default_po_rate))
+    default_amount = flt(
+        pr_data.get("custom_net_total")
+        if pr_data.get("custom_net_total") is not None
+        else pr_data.get("amount")
+    )
+
+    tolerance = 0.000001
+    if abs(flt(item.qty or 0) - pr_qty) > tolerance:
+        return True
+    if abs(flt(getattr(item, "custom_po_rate", 0) or 0) - default_po_rate) > tolerance:
+        return True
+    if abs(flt(getattr(item, "custom_discount_percentage", 0) or 0) - default_discount_pct) > tolerance:
+        return True
+    if abs(flt(getattr(item, "custom_discounted_amount", 0) or 0) - default_discount_amt) > tolerance:
+        return True
+    if abs(flt(getattr(item, "custom_gross_total", 0) or 0) - default_gross) > tolerance:
+        return True
+    if abs(flt(item.amount or 0) - default_amount) > tolerance:
+        return True
+
+    return bool(getattr(item, "_discount_manually_edited", False) or getattr(item, "_po_rate_manually_edited", False))
+
+
 def preserve_pr_amount(doc, method):
     """
     CRITICAL: Preserve PR amount BEFORE any calculations
@@ -73,6 +187,8 @@ def preserve_pr_amount(doc, method):
     
     for item in doc.items:
         if item.get("pr_detail"):
+            if _is_user_override_on_pr_row(doc, item):
+                continue
             pr_detail = item.pr_detail
             
             # Check for duplicate pr_detail in the same invoice
@@ -275,14 +391,17 @@ def preserve_pr_amount(doc, method):
                     # - store the same gross/source rate in price_list_rate for consistency
                     rate_precision = item.precision("rate") if hasattr(item, "precision") else 6
                     qty_precision = item.precision("qty") if hasattr(item, "precision") else 6
-                    source_gross_rate = flt(pr_price_list_rate, rate_precision)
+                    source_gross_rate = flt(
+                        get_source_visible_rate(pr_detail=pr_detail, po_detail=po_detail, fallback_rate=pr_price_list_rate),
+                        rate_precision,
+                    )
                     source_net_rate = flt(pr_rate, rate_precision)
 
-                    if po_detail:
-                        po_rate = frappe.db.get_value("Purchase Order Item", po_detail, "rate")
-                        source_gross_rate = flt(po_rate, rate_precision) or source_gross_rate
-
-                    display_rate = source_gross_rate or source_net_rate
+                    # Keep transactional rate net-safe. PO/list rate is shown in
+                    # price_list_rate and gross custom fields.
+                    display_rate = source_net_rate
+                    if not display_rate and flt(item.qty or 0):
+                        display_rate = flt(correct_amount / flt(item.qty or 0), rate_precision)
                     current_rate = flt(item.rate, rate_precision)
                     rate_edited = bool(
                         current_rate and (
@@ -506,12 +625,208 @@ def log_pre_validate_overbilling_snapshot(doc):
         )
 
 
+def _has_user_edited_pr_row(doc, item, before_doc):
+    """Detect explicit user edits on an existing PR-linked PI row."""
+    if not item.get("pr_detail"):
+        return False
+
+    # For new docs, compare current values against mapped PR defaults.
+    # This ensures first-save user edits are not overwritten by sync hooks.
+    if not before_doc:
+        pr_data = frappe.db.get_value(
+            "Purchase Receipt Item",
+            item.pr_detail,
+            [
+                "qty",
+                "rate",
+                "price_list_rate",
+                "purchase_order_item",
+                "custom_discount_",
+                "custom_discounted_amount",
+            ],
+            as_dict=True,
+        ) or {}
+
+        pr_qty = flt(pr_data.get("qty") or 0)
+        po_rate = 0
+        if pr_data.get("purchase_order_item"):
+            po_rate = flt(
+                frappe.db.get_value("Purchase Order Item", pr_data.get("purchase_order_item"), "rate") or 0
+            )
+        mapped_committed_rate = flt(po_rate or pr_data.get("price_list_rate") or pr_data.get("rate") or 0)
+        current_committed_rate = flt(getattr(item, "custom_po_rate", 0) or item.rate or 0)
+
+        mapped_discount_pct = flt(pr_data.get("custom_discount_") or 0)
+        current_discount_pct = flt(getattr(item, "custom_discount_percentage", 0) or 0)
+
+        mapped_discount_amt = flt(pr_data.get("custom_discounted_amount") or 0)
+        current_discount_amt = flt(getattr(item, "custom_discounted_amount", 0) or 0)
+
+        tolerance = 0.000001
+        if abs(flt(item.qty or 0) - pr_qty) > tolerance:
+            return True
+        if abs(current_committed_rate - mapped_committed_rate) > tolerance:
+            return True
+        if abs(current_discount_pct - mapped_discount_pct) > tolerance:
+            return True
+        if abs(current_discount_amt - mapped_discount_amt) > tolerance:
+            return True
+
+        if getattr(item, "_discount_manually_edited", False) or getattr(
+            item, "_po_rate_manually_edited", False
+        ):
+            return True
+        return False
+
+    if not item.get("name"):
+        return False
+
+    prev_row = next((d for d in before_doc.items if d.name == item.name), None)
+    if not prev_row:
+        return False
+
+    tracked_fields = (
+        "qty",
+        "custom_po_rate",
+        "rate",
+        "amount",
+        "custom_gross_total",
+        "custom_discount_percentage",
+        "custom_discounted_amount",
+        "custom_net_amount",
+    )
+    tolerance = 0.000001
+    for fieldname in tracked_fields:
+        if abs(flt(getattr(item, fieldname, 0) or 0) - flt(getattr(prev_row, fieldname, 0) or 0)) > tolerance:
+            return True
+    return False
+
+
+def _sync_pi_row_exact_from_pr(item):
+    """Copy PR row values exactly into PI row for deterministic mapping."""
+    if not item.get("pr_detail"):
+        return False
+
+    pr_data = frappe.db.get_value(
+        "Purchase Receipt Item",
+        item.pr_detail,
+        [
+            "qty",
+            "rate",
+            "amount",
+            "price_list_rate",
+            "purchase_order_item",
+            "custom_gross_rate",
+            "custom_discounted_amount",
+            "custom_discount_",
+            "custom_net_total",
+            "discount_percentage",
+            "discount_amount",
+        ],
+        as_dict=True,
+    ) or {}
+
+    if not pr_data:
+        return False
+
+    pr_qty = flt(pr_data.get("qty") or item.qty or 0)
+    pr_rate = flt(pr_data.get("rate") or item.rate or 0)
+    po_item_rate = 0
+    if pr_data.get("purchase_order_item"):
+        po_item_rate = flt(
+            frappe.db.get_value("Purchase Order Item", pr_data.get("purchase_order_item"), "rate") or 0
+        )
+    pr_amount = flt(
+        pr_data.get("custom_net_total")
+        if pr_data.get("custom_net_total") is not None
+        else pr_data.get("amount")
+    )
+    pr_gross_total = flt(
+        pr_data.get("custom_gross_rate")
+        if pr_data.get("custom_gross_rate") is not None
+        else (pr_qty * pr_rate)
+    )
+    pr_discount_amt = flt(
+        pr_data.get("custom_discounted_amount")
+        if pr_data.get("custom_discounted_amount") is not None
+        else pr_data.get("discount_amount")
+    )
+    pr_discount_pct = flt(
+        pr_data.get("custom_discount_")
+        if pr_data.get("custom_discount_") is not None
+        else pr_data.get("discount_percentage")
+    )
+    committed_rate = flt(po_item_rate or pr_data.get("price_list_rate") or pr_rate)
+    pr_visible_rate = committed_rate
+
+    item.qty = pr_qty
+    item.rate = pr_rate
+    if hasattr(item, "base_rate"):
+        item.base_rate = pr_rate
+
+    item.amount = pr_amount
+    if hasattr(item, "base_amount"):
+        item.base_amount = pr_amount
+    if hasattr(item, "net_amount"):
+        item.net_amount = pr_amount
+    if hasattr(item, "base_net_amount"):
+        item.base_net_amount = pr_amount
+
+    item.custom_gross_total = pr_gross_total
+    item.custom_discounted_amount = pr_discount_amt
+    item.custom_discount_percentage = pr_discount_pct
+    item.custom_net_amount = pr_amount
+
+    if hasattr(item, "discount_percentage"):
+        item.discount_percentage = pr_discount_pct
+    if hasattr(item, "discount_amount"):
+        item.discount_amount = pr_discount_amt
+    if hasattr(item, "price_list_rate"):
+        item.price_list_rate = pr_visible_rate
+    if hasattr(item, "custom_po_rate"):
+        item.custom_po_rate = committed_rate
+
+    return True
+
+
 def preserve_po_rate(doc, method):
     for item in doc.items:
-        if item.po_detail:
-            po_item = frappe.db.get_value("Purchase Order Item", item.po_detail, "rate")
-            if po_item:
-                item.rate = po_item
+        user_override = _is_user_override_on_pr_row(doc, item)
+
+        # For PR-linked rows, keep transactional rate net-safe (PR rate) to avoid
+        # ERPNext over-billing checks treating gross PO rate as billable amount.
+        if item.get("pr_detail"):
+            po_detail = frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "purchase_order_item")
+            po_rate = flt(frappe.db.get_value("Purchase Order Item", po_detail, "rate") or 0) if po_detail else 0
+            pr_rate = flt(frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "rate") or 0)
+            visible_rate = get_source_visible_rate(
+                pr_detail=item.get("pr_detail"),
+                po_detail=item.get("po_detail"),
+                fallback_rate=item.get("price_list_rate") or item.get("rate"),
+            )
+            if pr_rate:
+                item.rate = pr_rate
+                if hasattr(item, "base_rate"):
+                    item.base_rate = pr_rate
+            if hasattr(item, "price_list_rate") and not user_override:
+                item.price_list_rate = flt(po_rate or visible_rate or pr_rate)
+            if hasattr(item, "custom_po_rate") and not user_override:
+                item.custom_po_rate = flt(po_rate or visible_rate or pr_rate)
+            continue
+
+        visible_rate = get_source_visible_rate(
+            pr_detail=item.get("pr_detail"),
+            po_detail=item.get("po_detail"),
+            fallback_rate=item.get("price_list_rate") or item.get("rate"),
+        )
+        if visible_rate:
+            item.rate = visible_rate
+            if hasattr(item, "base_rate"):
+                item.base_rate = visible_rate
+            if hasattr(item, "price_list_rate") and not user_override:
+                item.price_list_rate = visible_rate
+            if hasattr(item, "custom_po_rate") and not user_override:
+                item.custom_po_rate = visible_rate
 
 def debug_validate_multiple_billing(doc, method):
     """
@@ -578,18 +893,36 @@ def debug_validate_multiple_billing(doc, method):
                 },
             )
             
-            if total_billed > pr_amount * 1.01:  # With 1% allowance
+            # Use actual configured allowance instead of hardcoded value.
+            from erpnext.controllers.status_updater import get_allowance_for
+            allowance_pct = flt(get_allowance_for(item.item_code, {}, None, None, "amount")[0] or 0)
+            max_allowed = flt(pr_amount * (100 + allowance_pct) / 100)
+            remaining_allowed = flt(max_allowed - already_billed_erpnext)
+
+            if total_billed > max_allowed:
+                # Final guard rail: clamp line amount to what ERPNext allows so
+                # validate_multiple_billing won't block user on save/submit.
+                safe_amount = max(0, remaining_allowed)
+                previous_amount = current_amount
+                item.amount = safe_amount
+                if hasattr(item, "base_amount"):
+                    item.base_amount = safe_amount
+                item.custom_net_amount = safe_amount
+
                 log_purchase_invoice_error(
                     doc, item, "DEBUG - Over-Billing Detected",
-                    f"Item {item.idx}: ERPNext will see already_billed={already_billed_erpnext}, current_amount={current_amount}, total={total_billed}, PR_amount={pr_amount}. This will cause over-billing error!",
+                    f"Item {item.idx}: ERPNext saw over-billing input and amount was auto-clamped from {previous_amount} to {safe_amount}.",
                     {
                         "pr_detail": pr_detail,
                         "pr_amount": pr_amount,
+                        "allowance_pct": allowance_pct,
                         "already_billed_erpnext": already_billed_erpnext,
-                        "current_amount": current_amount,
+                        "current_amount_before": previous_amount,
+                        "current_amount_after": safe_amount,
                         "total_billed": total_billed,
-                        "max_allowed": pr_amount * 1.01,
-                        "overbill_amount": total_billed - (pr_amount * 1.01),
+                        "max_allowed": max_allowed,
+                        "remaining_allowed": remaining_allowed,
+                        "overbill_amount": total_billed - max_allowed,
                         "item_name": item.name or 'New',
                         "doc_name": doc.name or 'New',
                         "doc_docstatus": doc.docstatus
@@ -605,13 +938,23 @@ def calculation_pi(doc, method):
     from frappe.utils import flt
     
     try:
+        before_doc = None if doc.is_new() else doc.get_doc_before_save()
         gross_total = 0
         discounted_total = 0
         net_total = 0
 
         for i in doc.items:
+            if i.get("pr_detail") and not _has_user_edited_pr_row(doc, i, before_doc):
+                _sync_pi_row_exact_from_pr(i)
+                gross_total += flt(i.custom_gross_total)
+                discounted_total += flt(i.custom_discounted_amount)
+                net_total += flt(i.amount)
+                continue
+
             original_rate = flt(i.rate)
             original_base_rate = flt(i.base_rate) if hasattr(i, "base_rate") else None
+            original_po_rate = flt(getattr(i, "custom_po_rate", 0) or 0)
+            editable_rate = flt(getattr(i, "custom_po_rate", 0) or i.rate or 0)
 
             # Check if this item is linked to Purchase Receipt
             is_from_pr = bool(i.get("pr_detail"))
@@ -631,9 +974,9 @@ def calculation_pi(doc, method):
                     except:
                         pr_amount = None
             
-            # Always calculate gross total: qty * rate = custom_gross_total
+            # Always calculate gross total from editable PO committed rate.
             # This applies to both PR and non-PR items
-            calculated_gross = flt(i.qty) * flt(i.rate)
+            calculated_gross = flt(i.qty) * editable_rate
             i.custom_gross_total = calculated_gross
             
             # For PR-linked items, check if user has manually edited discount
@@ -649,16 +992,17 @@ def calculation_pi(doc, method):
 
                 pr_discount_pct = flt(pr_custom.get("custom_discount_")) if pr_custom.get("custom_discount_") is not None else 0
                 pr_discount_amt = flt(pr_custom.get("custom_discounted_amount", 0))
-                pr_visible_rate = flt(pr_custom.get("price_list_rate") or pr_custom.get("rate") or 0)
                 po_detail = pr_custom.get("purchase_order_item")
-                if po_detail:
-                    po_rate = frappe.db.get_value("Purchase Order Item", po_detail, "rate")
-                    pr_visible_rate = flt(po_rate) or pr_visible_rate
+                pr_visible_rate = get_source_visible_rate(
+                    pr_detail=i.pr_detail,
+                    po_detail=po_detail,
+                    fallback_rate=pr_custom.get("price_list_rate") or pr_custom.get("rate"),
+                )
                 
                 # Check if user has edited discount (compare current values with PR values)
                 current_discount_pct = flt(i.custom_discount_percentage) if i.custom_discount_percentage is not None else 0
                 current_discount_amt = flt(i.custom_discounted_amount) if i.custom_discounted_amount is not None else 0
-                current_rate = flt(i.rate) if i.rate is not None else 0
+                current_rate = flt(getattr(i, "custom_po_rate", 0) or i.rate or 0)
                 rate_edited = bool(current_rate and pr_visible_rate and abs(current_rate - pr_visible_rate) > 0.000001)
                 
                 # If discount values differ from PR, assume user edited them
@@ -809,6 +1153,8 @@ def calculation_pi(doc, method):
             i.rate = original_rate
             if original_base_rate is not None and hasattr(i, "base_rate"):
                 i.base_rate = original_base_rate
+            if hasattr(i, "custom_po_rate"):
+                i.custom_po_rate = original_po_rate or editable_rate
 
             # Accumulate totals
             gross_total += flt(i.custom_gross_total)
@@ -858,12 +1204,51 @@ def calculation_pi(doc, method):
 
 
 def finalize_pi_amounts(doc, method):
+    before_doc = None if doc.is_new() else doc.get_doc_before_save()
     gross_total = 0
     discount_total = 0
     net_total = 0
 
     for item in doc.items:
-        gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * flt(item.rate))
+        user_override = _is_user_override_on_pr_row(doc, item)
+
+        if item.get("pr_detail") and not _has_user_edited_pr_row(doc, item, before_doc):
+            _sync_pi_row_exact_from_pr(item)
+            gross_total += flt(item.custom_gross_total)
+            discount_total += flt(item.custom_discounted_amount)
+            net_total += flt(item.amount)
+            continue
+
+        if item.get("pr_detail") or item.get("po_detail"):
+            visible_rate = get_source_visible_rate(
+                pr_detail=item.get("pr_detail"),
+                po_detail=item.get("po_detail"),
+                fallback_rate=item.get("price_list_rate") or item.get("rate"),
+            )
+
+            if item.get("pr_detail"):
+                po_detail = frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "purchase_order_item")
+                po_rate = flt(frappe.db.get_value("Purchase Order Item", po_detail, "rate") or 0) if po_detail else 0
+                pr_rate = flt(frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "rate") or 0)
+                if pr_rate:
+                    item.rate = pr_rate
+                    if hasattr(item, "base_rate"):
+                        item.base_rate = pr_rate
+                if hasattr(item, "price_list_rate") and not user_override:
+                    item.price_list_rate = flt(po_rate or visible_rate or pr_rate)
+                if hasattr(item, "custom_po_rate") and not user_override:
+                    item.custom_po_rate = flt(po_rate or visible_rate or pr_rate)
+            elif visible_rate:
+                item.rate = visible_rate
+                if hasattr(item, "base_rate"):
+                    item.base_rate = visible_rate
+                if hasattr(item, "price_list_rate") and not user_override:
+                    item.price_list_rate = visible_rate
+                if hasattr(item, "custom_po_rate") and not user_override:
+                    item.custom_po_rate = visible_rate
+
+        editable_rate = flt(getattr(item, "custom_po_rate", 0) or item.rate or 0)
+        gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * editable_rate)
         discount_pct_value = item.custom_discount_percentage
 
         if discount_pct_value is not None:
@@ -943,9 +1328,15 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
         Purchase Invoice uses: custom_gross_total, custom_discount_percentage, custom_net_amount
         """
         # Map from PR fields to PI fields
-        source_visible_rate = flt(getattr(source_item, "price_list_rate", 0) or 0)
-        if not source_visible_rate:
-            source_visible_rate = flt(getattr(source_item, "rate", 0) or 0)
+        source_visible_rate = get_source_visible_rate(
+            pr_detail=getattr(source_item, "name", None),
+            po_detail=getattr(source_item, "purchase_order_item", None),
+            fallback_rate=getattr(source_item, "price_list_rate", 0) or getattr(source_item, "rate", 0),
+        )
+        source_po_rate = flt(
+            frappe.db.get_value("Purchase Order Item", getattr(source_item, "purchase_order_item", None), "rate")
+            or 0
+        )
 
         if source_visible_rate:
             target_item.rate = source_visible_rate
@@ -954,6 +1345,8 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
 
         if hasattr(target_item, "price_list_rate") and source_visible_rate:
             target_item.price_list_rate = source_visible_rate
+        if hasattr(target_item, "custom_po_rate"):
+            target_item.custom_po_rate = flt(source_po_rate or source_visible_rate or target_item.rate or 0)
 
         if hasattr(source_item, "custom_gross_rate") and source_item.custom_gross_rate:
             target_item.custom_gross_total = source_item.custom_gross_rate
@@ -969,7 +1362,8 @@ def make_purchase_invoice_custom(source_name, target_doc=None):
         
         # Recalculate gross total if not set or if qty/rate changed
         if not target_item.custom_gross_total or target_item.custom_gross_total == 0:
-            target_item.custom_gross_total = target_item.qty * target_item.rate
+            gross_rate = flt(getattr(target_item, "custom_po_rate", 0) or target_item.rate or 0)
+            target_item.custom_gross_total = target_item.qty * gross_rate
         
         # Calculate discount if percentage is set but amount is not
         if target_item.custom_discount_percentage and not target_item.custom_discounted_amount:
