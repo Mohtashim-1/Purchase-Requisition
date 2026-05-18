@@ -630,75 +630,70 @@ def _has_user_edited_pr_row(doc, item, before_doc):
     if not item.get("pr_detail"):
         return False
 
-    # For new docs, compare current values against mapped PR defaults.
-    # This ensures first-save user edits are not overwritten by sync hooks.
-    if not before_doc:
-        pr_data = frappe.db.get_value(
-            "Purchase Receipt Item",
-            item.pr_detail,
-            [
-                "qty",
-                "rate",
-                "price_list_rate",
-                "purchase_order_item",
-                "custom_discount_",
-                "custom_discounted_amount",
-            ],
-            as_dict=True,
-        ) or {}
-
-        pr_qty = flt(pr_data.get("qty") or 0)
-        po_rate = 0
-        if pr_data.get("purchase_order_item"):
-            po_rate = flt(
-                frappe.db.get_value("Purchase Order Item", pr_data.get("purchase_order_item"), "rate") or 0
-            )
-        mapped_committed_rate = flt(po_rate or pr_data.get("price_list_rate") or pr_data.get("rate") or 0)
-        current_committed_rate = flt(getattr(item, "custom_po_rate", 0) or item.rate or 0)
-
-        mapped_discount_pct = flt(pr_data.get("custom_discount_") or 0)
-        current_discount_pct = flt(getattr(item, "custom_discount_percentage", 0) or 0)
-
-        mapped_discount_amt = flt(pr_data.get("custom_discounted_amount") or 0)
-        current_discount_amt = flt(getattr(item, "custom_discounted_amount", 0) or 0)
-
-        tolerance = 0.000001
-        if abs(flt(item.qty or 0) - pr_qty) > tolerance:
-            return True
-        if abs(current_committed_rate - mapped_committed_rate) > tolerance:
-            return True
-        if abs(current_discount_pct - mapped_discount_pct) > tolerance:
-            return True
-        if abs(current_discount_amt - mapped_discount_amt) > tolerance:
-            return True
-
-        if getattr(item, "_discount_manually_edited", False) or getattr(
-            item, "_po_rate_manually_edited", False
-        ):
-            return True
-        return False
-
-    if not item.get("name"):
-        return False
-
-    prev_row = next((d for d in before_doc.items if d.name == item.name), None)
-    if not prev_row:
-        return False
-
-    tracked_fields = (
-        "qty",
-        "custom_po_rate",
-        "rate",
-        "amount",
-        "custom_gross_total",
-        "custom_discount_percentage",
-        "custom_discounted_amount",
-        "custom_net_amount",
-    )
     tolerance = 0.000001
-    for fieldname in tracked_fields:
-        if abs(flt(getattr(item, fieldname, 0) or 0) - flt(getattr(prev_row, fieldname, 0) or 0)) > tolerance:
-            return True
+
+    if before_doc and item.get("name"):
+        prev_row = next((d for d in before_doc.items if d.name == item.name), None)
+        if prev_row:
+            tracked_fields = (
+                "qty",
+                "custom_po_rate",
+                "rate",
+                "amount",
+                "custom_gross_total",
+                "custom_discount_percentage",
+                "custom_discounted_amount",
+                "custom_net_amount",
+            )
+            for fieldname in tracked_fields:
+                if abs(flt(getattr(item, fieldname, 0) or 0) - flt(getattr(prev_row, fieldname, 0) or 0)) > tolerance:
+                    return True
+
+    pr_data = frappe.db.get_value(
+        "Purchase Receipt Item",
+        item.pr_detail,
+        [
+            "qty",
+            "rate",
+            "price_list_rate",
+            "purchase_order_item",
+            "custom_discount_",
+            "custom_discounted_amount",
+        ],
+        as_dict=True,
+    ) or {}
+
+    pr_qty = flt(pr_data.get("qty") or 0)
+    po_rate = 0
+    if pr_data.get("purchase_order_item"):
+        po_rate = flt(
+            frappe.db.get_value("Purchase Order Item", pr_data.get("purchase_order_item"), "rate") or 0
+        )
+    mapped_committed_rate = flt(po_rate or pr_data.get("price_list_rate") or pr_data.get("rate") or 0)
+    current_committed_rate = flt(getattr(item, "custom_po_rate", 0) or item.rate or 0)
+
+    mapped_discount_pct = flt(pr_data.get("custom_discount_") or 0)
+    current_discount_pct = flt(getattr(item, "custom_discount_percentage", 0) or 0)
+
+    mapped_discount_amt = flt(pr_data.get("custom_discounted_amount") or 0)
+    current_discount_amt = flt(getattr(item, "custom_discounted_amount", 0) or 0)
+
+    # A saved PI row may intentionally differ from its mapped PR row. Keep that
+    # as the user's choice instead of auto-copying the PR discount back later.
+    if abs(flt(item.qty or 0) - pr_qty) > tolerance:
+        return True
+    if abs(current_committed_rate - mapped_committed_rate) > tolerance:
+        return True
+    if abs(current_discount_pct - mapped_discount_pct) > tolerance:
+        return True
+    if abs(current_discount_amt - mapped_discount_amt) > tolerance:
+        return True
+
+    if getattr(item, "_discount_manually_edited", False) or getattr(
+        item, "_po_rate_manually_edited", False
+    ):
+        return True
+
     return False
 
 

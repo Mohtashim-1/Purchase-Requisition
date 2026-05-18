@@ -106,6 +106,13 @@ def _recalculate_item_totals(receipt_item, source_rate, conversion_rate):
 
 
 def get_pr_in_grn(doc, method):
+    if doc.get("is_return"):
+        _pr_debug_print(
+            "skip_po_pricing_for_purchase_return",
+            {"pr": doc.name or "New", "return_against": doc.get("return_against")},
+        )
+        return
+
     meta = frappe.get_meta("Purchase Receipt Item")
     conversion_rate = flt(doc.conversion_rate or 1)
     for i in doc.items:
