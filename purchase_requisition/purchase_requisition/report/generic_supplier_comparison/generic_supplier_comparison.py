@@ -55,6 +55,9 @@ def execute(filters=None):
             parent.quotation_date AS quotation_date,
             parent.supplier AS supplier,
             parent.generic AS generic,
+            gen.generic_name AS generic_name,
+            gen.strength AS strength,
+            gen.form AS form,
             child.item AS item,
             child.uom AS uom,
             child.qty AS qty,
@@ -70,6 +73,8 @@ def execute(filters=None):
         FROM `tabGeneric Vendor Quotation Item` child
         INNER JOIN `tabGeneric Vendor Quotation` parent
             ON child.parent = parent.name
+        LEFT JOIN `tabGeneric` gen
+            ON gen.name = parent.generic
         WHERE {where_clause}
     """
 
@@ -108,7 +113,10 @@ def execute(filters=None):
         {"fieldname": "quotation_no", "label": "Quotation", "fieldtype": "Link", "options": "Generic Vendor Quotation", "width": 160},
         {"fieldname": "quotation_date", "label": "Quotation Date", "fieldtype": "Date", "width": 110},
         {"fieldname": "supplier", "label": "Supplier", "fieldtype": "Link", "options": "Supplier", "width": 160},
-        {"fieldname": "generic", "label": "Generic", "fieldtype": "Link", "options": "Item Group", "width": 160},
+        {"fieldname": "generic", "label": "Generic ID", "fieldtype": "Link", "options": "Generic", "width": 100},
+        {"fieldname": "generic_name", "label": "Generic Name", "fieldtype": "Data", "width": 160},
+        {"fieldname": "strength", "label": "Strength", "fieldtype": "Data", "width": 100},
+        {"fieldname": "form", "label": "Form", "fieldtype": "Data", "width": 90},
         {"fieldname": "item", "label": "Item", "fieldtype": "Link", "options": "Item", "width": 160},
         {"fieldname": "uom", "label": "UOM", "fieldtype": "Link", "options": "UOM", "width": 80},
         {"fieldname": "qty", "label": "Qty", "fieldtype": "Float", "width": 90},

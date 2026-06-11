@@ -15,9 +15,10 @@
  "fields": [
   {
    "fieldname": "generic",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Generic",
+   "options": "Generic",
    "reqd": 1
   },
   {

@@ -47,7 +47,7 @@
    "fieldname": "generic",
    "fieldtype": "Link",
    "label": "Generic",
-   "options": "Item Group",
+   "options": "Generic",
    "reqd": 1
   },
   {

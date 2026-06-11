@@ -14,11 +14,49 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Transaction",
-   "link_count": 2,
+   "label": "Reports",
+   "link_count": 1,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Generic Supplier Comparison",
+   "link_count": 0,
+   "link_to": "Generic Supplier Comparison",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Transaction",
+   "link_count": 5,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Generic",
+   "link_count": 0,
+   "link_to": "Generic",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Supplier",
+   "link_count": 0,
+   "link_to": "Supplier",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -43,15 +81,6 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Reports",
-   "link_count": 1,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Generic Supplier Comparison",
    "link_count": 0,
    "link_to": "Generic Supplier Comparison",
@@ -60,7 +89,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-01-13 21:38:00.702313",
+ "modified": "2026-06-12 01:32:19.838078",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Comparison",

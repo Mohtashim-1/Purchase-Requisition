@@ -5,9 +5,9 @@ frappe.query_reports["Generic Supplier Comparison"] = {
 	"filters": [
 		{
 			"fieldname": "generic",
-			"label": "Generic",
+			"label": "Generic ID",
 			"fieldtype": "Link",
-			"options": "Item Group",
+			"options": "Generic",
 			"reqd": 1
 		},
 		{

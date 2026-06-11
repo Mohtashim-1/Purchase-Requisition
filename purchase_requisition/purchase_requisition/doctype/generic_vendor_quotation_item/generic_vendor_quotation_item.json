@@ -29,7 +29,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Generic",
-   "options": "Item Group"
+   "options": "Generic"
   },
   {
    "fieldname": "uom",
