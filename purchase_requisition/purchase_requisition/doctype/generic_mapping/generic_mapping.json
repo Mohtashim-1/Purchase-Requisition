@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "hash",
- "creation": "2025-01-01 00:00:00.000000",
+ "creation": "2025-01-01 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -15,14 +15,15 @@
  "fields": [
   {
    "fieldname": "generic",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Generic",
-   "options": "Item Group",
    "reqd": 1
   },
   {
    "fieldname": "item",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Item",
    "options": "Item",
    "reqd": 1
@@ -46,10 +47,11 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-01-01 00:00:00.000000",
+ "modified": "2026-06-12 01:17:18.623612",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Generic Mapping",
+ "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [
   {
@@ -62,7 +64,6 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
-   "submit": 0,
    "write": 1
   },
   {
@@ -74,7 +75,6 @@
    "report": 1,
    "role": "Purchase Manager",
    "share": 1,
-   "submit": 0,
    "write": 1
   },
   {
@@ -86,12 +86,12 @@
    "report": 1,
    "role": "Purchase User",
    "share": 1,
-   "submit": 0,
    "write": 1
   }
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
+ "states": [],
  "track_changes": 1,
  "track_seen": 1,
  "track_views": 1
