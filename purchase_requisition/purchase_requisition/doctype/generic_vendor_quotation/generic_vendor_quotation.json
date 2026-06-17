@@ -10,11 +10,22 @@
   "quotation_date",
   "supplier",
   "generic",
+  "column_break_header",
   "currency",
   "company",
-  "column_break_1",
+  "pricing_section",
+  "item",
+  "qty",
+  "uom",
+  "column_break_pricing",
+  "rate",
+  "discount_percent",
+  "tax_amount",
+  "total_rate",
+  "validity_section",
   "valid_from",
   "valid_upto",
+  "column_break_1",
   "lead_time_days",
   "payment_terms",
   "delivery_terms",
@@ -51,6 +62,10 @@
    "reqd": 1
   },
   {
+   "fieldname": "column_break_header",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Currency",
@@ -63,8 +78,66 @@
    "options": "Company"
   },
   {
-   "fieldname": "column_break_1",
+   "fieldname": "pricing_section",
+   "fieldtype": "Section Break",
+   "label": "Pricing"
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "default": "1",
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Qty",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Nos",
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "label": "UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "column_break_pricing",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Unit Rate",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "discount_percent",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Discount %"
+  },
+  {
+   "fieldname": "tax_amount",
+   "fieldtype": "Currency",
+   "label": "Tax Amount",
+   "options": "currency"
+  },
+  {
+   "fieldname": "total_rate",
+   "fieldtype": "Currency",
+   "label": "Net Rate",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "validity_section",
+   "fieldtype": "Section Break",
+   "label": "Validity"
   },
   {
    "fieldname": "valid_from",
@@ -77,6 +150,10 @@
    "fieldtype": "Date",
    "label": "Valid Upto",
    "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "lead_time_days",
@@ -109,11 +186,13 @@
   {
    "fieldname": "items_section",
    "fieldtype": "Section Break",
+   "hidden": 1,
    "label": "Items"
   },
   {
    "fieldname": "items",
    "fieldtype": "Table",
+   "hidden": 1,
    "label": "Generic Vendor Quotation Items",
    "options": "Generic Vendor Quotation Item"
   }
@@ -121,7 +200,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-01-01 00:00:00.000000",
+ "modified": "2026-06-12 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Purchase Requisition",
  "name": "Generic Vendor Quotation",
@@ -161,6 +240,7 @@
    "report": 1,
    "role": "Purchase User",
    "share": 1,
+   "submit": 1,
    "write": 1
   }
  ],
