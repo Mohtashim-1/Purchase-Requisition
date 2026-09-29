@@ -12,6 +12,36 @@ function pi_log(label, payload) {
     }
 }
 
+function get_document_additional_discount(frm, net_total) {
+    let discount = pi_flt(frm.doc.discount_amount);
+    const pct = pi_flt(frm.doc.additional_discount_percentage);
+    const taxes = pi_flt(frm.doc.total_taxes_and_charges);
+    if (pct) {
+        const base = (frm.doc.apply_discount_on === 'Net Total') ? net_total : (net_total + taxes);
+        discount = (base * pct) / 100;
+    }
+    return Math.max(0, discount);
+}
+
+function apply_client_document_totals(frm, net_total) {
+    const taxes = pi_flt(frm.doc.total_taxes_and_charges);
+    const discount = get_document_additional_discount(frm, net_total);
+    const grand = Math.max(0, net_total + taxes - discount);
+
+    frm.doc.total = net_total;
+    frm.doc.net_total = net_total;
+    frm.doc.base_total = net_total;
+    frm.doc.base_net_total = net_total;
+    frm.doc.grand_total = grand;
+    frm.doc.base_grand_total = grand;
+    frm.doc.rounded_total = grand;
+    frm.doc.base_rounded_total = grand;
+    frm.doc.outstanding_amount = grand;
+    if (discount && !pi_flt(frm.doc.discount_amount)) {
+        frm.doc.discount_amount = discount;
+    }
+}
+
 function get_editable_rate(row) {
     return pi_flt(row.custom_po_rate || row.rate);
 }
@@ -19,48 +49,42 @@ function get_editable_rate(row) {
 function normalize_row_display_rate(row) {
     if (!row) return;
 
+    // Only fill missing committed rate. Never overwrite transactional rate.
     if (Object.prototype.hasOwnProperty.call(row, 'custom_po_rate') && !pi_flt(row.custom_po_rate)) {
         const po_rate_candidate = pi_flt(row.price_list_rate || row.rate);
         if (po_rate_candidate) row.custom_po_rate = po_rate_candidate;
     }
 
-    const current_rate = get_editable_rate(row);
-    if (current_rate) return;
+    if (get_editable_rate(row)) return;
 
     const price_list_rate = pi_flt(row.price_list_rate);
     if (price_list_rate) {
         row.custom_po_rate = price_list_rate;
-        row.rate = price_list_rate;
-        if (Object.prototype.hasOwnProperty.call(row, 'base_rate')) {
-            row.base_rate = price_list_rate;
-        }
         return;
     }
 
     const qty = pi_flt(row.qty);
     const gross_total = pi_flt(row.custom_gross_total);
     if (qty && gross_total) {
-        const derived_rate = gross_total / qty;
-        row.custom_po_rate = derived_rate;
-        row.rate = derived_rate;
-        if (Object.prototype.hasOwnProperty.call(row, 'base_rate')) {
-            row.base_rate = derived_rate;
-        }
-        if (Object.prototype.hasOwnProperty.call(row, 'price_list_rate')) {
-            row.price_list_rate = derived_rate;
-        }
+        row.custom_po_rate = gross_total / qty;
     }
 }
 
 function preserve_rate_after_discount_update(row, callback) {
     normalize_row_display_rate(row);
-    const preserved_rate = get_editable_rate(row);
+    // Keep committed PO rate for gross display/calc.
+    // Do NOT overwrite transactional `rate` with PO rate; ERPNext uses rate*qty
+    // during save and that wipes discounted amount.
+    const preserved_po_rate = get_editable_rate(row);
+    const preserved_txn_rate = pi_flt(row.rate);
     const preserved_base_rate = pi_flt(row.base_rate || row.rate);
 
     callback();
 
-    row.custom_po_rate = preserved_rate;
-    row.rate = preserved_rate;
+    row.custom_po_rate = preserved_po_rate;
+    if (preserved_txn_rate || preserved_txn_rate === 0) {
+        row.rate = preserved_txn_rate;
+    }
     if (Object.prototype.hasOwnProperty.call(row, 'base_rate')) {
         row.base_rate = preserved_base_rate;
     }
@@ -81,8 +105,16 @@ function recalculate_row_from_discount(row) {
     });
     preserve_rate_after_discount_update(row, () => {
         row.custom_gross_total = pi_flt(row.qty) * get_editable_rate(row);
-        row.custom_net_amount = pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount);
+        row.custom_discounted_amount = Math.min(pi_flt(row.custom_discounted_amount), pi_flt(row.custom_gross_total));
+        row.custom_net_amount = Math.max(0, pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount));
         row.amount = row.custom_net_amount;
+        // Keep transactional rate net-safe so server qty*rate does not wipe discount.
+        if (pi_flt(row.qty)) {
+            row.rate = pi_flt(row.custom_net_amount) / pi_flt(row.qty);
+            if (Object.prototype.hasOwnProperty.call(row, 'base_rate')) {
+                row.base_rate = row.rate;
+            }
+        }
     });
     pi_log('recalculate_row_from_discount:after', {
         idx: row.idx,
@@ -121,6 +153,12 @@ function recalculate_row_from_qty_or_rate(row) {
     row.custom_discounted_amount = Math.min(pi_flt(row.custom_discounted_amount), pi_flt(row.custom_gross_total));
     row.custom_net_amount = Math.max(0, pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount));
     row.amount = row.custom_net_amount;
+    if (pi_flt(row.qty)) {
+        row.rate = pi_flt(row.custom_net_amount) / pi_flt(row.qty);
+        if (Object.prototype.hasOwnProperty.call(row, 'base_rate')) {
+            row.base_rate = row.rate;
+        }
+    }
     pi_log('recalculate_row_from_qty_or_rate:after', {
         idx: row.idx,
         qty: row.qty,
@@ -194,16 +232,15 @@ function sync_mapped_pi_amounts(frm) {
     frm.doc.custom_discounted_percentage = gross_total > 0 ? (discount_total / gross_total) * 100 : 0;
     frm.doc.custom_net_rate = net_total;
 
-    if (Math.abs(pi_flt(frm.doc.total) - net_total) > 0.01) {
-        frm.doc.total = net_total;
-        frm.doc.net_total = net_total;
-        frm.doc.base_total = net_total;
-        frm.doc.base_net_total = net_total;
-        frm.doc.grand_total = net_total;
-        frm.doc.base_grand_total = net_total;
-        frm.doc.rounded_total = net_total;
-        frm.doc.base_rounded_total = net_total;
-        frm.doc.outstanding_amount = net_total;
+    const expected_grand = Math.max(
+        0,
+        net_total + pi_flt(frm.doc.total_taxes_and_charges) - get_document_additional_discount(frm, net_total)
+    );
+    if (
+        Math.abs(pi_flt(frm.doc.total) - net_total) > 0.01
+        || Math.abs(pi_flt(frm.doc.grand_total) - expected_grand) > 0.01
+    ) {
+        apply_client_document_totals(frm, net_total);
         has_changes = true;
     }
 
@@ -341,18 +378,30 @@ frappe.ui.form.on('Purchase Invoice', {
         frm.set_value('custom_discounted_percentage', gross_total > 0 ? (discount_total / gross_total) * 100 : 0);
         frm.set_value('custom_net_rate', net_total);
 
-        if (Math.abs(pi_flt(frm.doc.total) - net_total) > 0.01) {
-            frm.doc.total = net_total;
-            frm.doc.net_total = net_total;
-            frm.doc.base_total = net_total;
-            frm.doc.base_net_total = net_total;
-            frm.doc.grand_total = net_total;
-            frm.doc.base_grand_total = net_total;
-            frm.doc.rounded_total = net_total;
-            frm.doc.base_rounded_total = net_total;
-            frm.doc.outstanding_amount = net_total;
-            frm.refresh_fields(['total', 'net_total', 'grand_total', 'outstanding_amount']);
-        }
-        pi_log('recalculate_totals:end', { gross_total, discount_total, net_total });
+        apply_client_document_totals(frm, net_total);
+        frm.refresh_fields(['total', 'net_total', 'grand_total', 'rounded_total', 'outstanding_amount', 'discount_amount']);
+        pi_log('recalculate_totals:end', {
+            gross_total,
+            discount_total,
+            net_total,
+            discount_amount: frm.doc.discount_amount,
+            grand_total: frm.doc.grand_total
+        });
+    },
+
+    discount_amount: function(frm) {
+        pi_log('discount_amount_changed', { discount_amount: frm.doc.discount_amount });
+        frm.trigger('recalculate_totals');
+    },
+
+    additional_discount_percentage: function(frm) {
+        pi_log('additional_discount_percentage_changed', {
+            additional_discount_percentage: frm.doc.additional_discount_percentage
+        });
+        frm.trigger('recalculate_totals');
+    },
+
+    apply_discount_on: function(frm) {
+        frm.trigger('recalculate_totals');
     }
 });
