@@ -171,6 +171,41 @@ def _is_user_override_on_pr_row(doc, item):
     return bool(getattr(item, "_discount_manually_edited", False) or getattr(item, "_po_rate_manually_edited", False))
 
 
+
+def _stash_additional_discount(doc):
+    """
+    Prevent ERPNext calculate_taxes_and_totals from distributing Additional Discount
+    during validate. On save/submit the draft may already contain once-discounted
+    item amounts; ERPNext would apply discount_amount again and wipe print fields.
+    We apply the discount exactly once later in finalize_pi_amounts.
+    """
+    if getattr(doc.flags, "_pi_additional_discount_stashed", False):
+        return
+    doc.flags._pi_additional_discount_stashed = True
+    doc.flags._pi_stashed_discount_amount = flt(doc.get("discount_amount") or 0)
+    doc.flags._pi_stashed_additional_discount_percentage = flt(
+        doc.get("additional_discount_percentage") or 0
+    )
+    doc.flags._pi_stashed_apply_discount_on = doc.get("apply_discount_on") or "Grand Total"
+    doc.discount_amount = 0
+    doc.additional_discount_percentage = 0
+    if hasattr(doc, "base_discount_amount"):
+        doc.base_discount_amount = 0
+
+
+def _restore_additional_discount(doc):
+    """Restore stashed Additional Discount fields before our single apply."""
+    if not getattr(doc.flags, "_pi_additional_discount_stashed", False):
+        return
+    doc.discount_amount = flt(getattr(doc.flags, "_pi_stashed_discount_amount", 0) or 0)
+    doc.additional_discount_percentage = flt(
+        getattr(doc.flags, "_pi_stashed_additional_discount_percentage", 0) or 0
+    )
+    if getattr(doc.flags, "_pi_stashed_apply_discount_on", None):
+        doc.apply_discount_on = doc.flags._pi_stashed_apply_discount_on
+    doc.flags._pi_additional_discount_stashed = False
+
+
 def preserve_pr_amount(doc, method):
     """
     CRITICAL: Preserve PR amount BEFORE any calculations
@@ -181,6 +216,9 @@ def preserve_pr_amount(doc, method):
     The over-billing validation checks: already_billed + current_item.amount <= PR_item.amount * (1 + allowance)
     """
     from frappe.utils import flt
+
+    # Stash document Additional Discount so ERPNext validate does not apply it.
+    _stash_additional_discount(doc)
     
     # Track pr_details to detect duplicates
     pr_details_seen = {}
@@ -1171,9 +1209,24 @@ def calculation_pi(doc, method):
             doc.custom_discounted_percentage = 0
         
         doc.custom_net_rate = flt(net_total)
-
-        # Standard totals must honour document Additional Discount.
-        _apply_document_totals(doc, flt(net_total))
+        # Keep print discount fields in sync during validate (finalize applies amounts).
+        _restore_additional_discount(doc)
+        doc_discount = flt(doc.get("discount_amount") or 0)
+        if not doc_discount and flt(doc.get("additional_discount_percentage") or 0):
+            apply_on = doc.get("apply_discount_on") or "Grand Total"
+            base = flt(net_total) if apply_on == "Net Total" else (
+                flt(net_total) + flt(doc.total_taxes_and_charges or 0)
+            )
+            doc_discount = flt(base * flt(doc.additional_discount_percentage) / 100)
+            doc.discount_amount = doc_discount
+        total_discount = flt(discounted_total) + doc_discount
+        doc.custom_discounted_amount = total_discount
+        if flt(doc.custom_gross_rate):
+            doc.custom_discounted_percentage = flt((total_discount / flt(doc.custom_gross_rate)) * 100)
+        else:
+            doc.custom_discounted_percentage = 0
+        # Re-stash so finalize still owns the single amount distribution.
+        _stash_additional_discount(doc)
     
     except Exception as e:
         # Log any calculation errors to centralized error log
@@ -1215,17 +1268,31 @@ def _resolve_additional_discount_amount(doc, net_total, total_taxes):
     return discount
 
 
+def _get_pr_line_net(pr_detail):
+    """PR billed net for a row, before document Additional Discount."""
+    if not pr_detail:
+        return 0
+    pr_data = frappe.db.get_value(
+        "Purchase Receipt Item",
+        pr_detail,
+        ["amount", "custom_net_total"],
+        as_dict=True,
+    ) or {}
+    if pr_data.get("custom_net_total") is not None:
+        return flt(pr_data.get("custom_net_total"))
+    return flt(pr_data.get("amount") or 0)
+
+
 def _distribute_additional_discount(doc, net_total, discount):
     """
     Distribute document Additional Discount across item amounts so GL balances.
-    Mirrors ERPNext taxes_and_totals.apply_discount_amount (non cash/non-trade).
+    Does not change row custom_* fields (print uses parent custom discount fields).
     """
     discount = flt(discount)
     if not discount or not flt(net_total):
         return flt(net_total)
 
     if doc.get("is_cash_or_non_trade_discount"):
-        # Leave item amounts; caller subtracts discount from grand_total only.
         return flt(net_total)
 
     conversion_rate = flt(doc.get("conversion_rate") or 1)
@@ -1249,9 +1316,6 @@ def _distribute_additional_discount(doc, net_total, discount):
             item.net_amount = new_amt
         if hasattr(item, "base_net_amount"):
             item.base_net_amount = flt(new_amt * conversion_rate)
-        if hasattr(item, "custom_net_amount"):
-            # Keep custom_net in sync with billed amount after doc discount.
-            item.custom_net_amount = new_amt
         if flt(item.qty):
             item.rate = flt(new_amt / flt(item.qty))
             if hasattr(item, "base_rate"):
@@ -1261,52 +1325,44 @@ def _distribute_additional_discount(doc, net_total, discount):
     return target_net
 
 
-def _apply_document_totals(doc, net_total):
-    """Set standard PI totals, honouring document Additional Discount."""
+def _apply_document_totals(doc, net_total, row_discount_total=0):
+    """
+    Apply document Additional Discount once and set print/custom totals.
+    net_total must be line total BEFORE document Additional Discount.
+    """
     total_taxes = flt(doc.total_taxes_and_charges or 0)
-    base_total_taxes = flt(doc.base_total_taxes_and_charges or 0)
     conversion_rate = flt(doc.get("conversion_rate") or 1)
 
     discount = _resolve_additional_discount_amount(doc, net_total, total_taxes)
+
+    # Print format reads custom_discounted_* — include document discount here.
+    total_discount = flt(row_discount_total) + flt(discount)
+    doc.custom_discounted_amount = total_discount
+    if flt(doc.custom_gross_rate):
+        doc.custom_discounted_percentage = flt((total_discount / flt(doc.custom_gross_rate)) * 100)
+    else:
+        doc.custom_discounted_percentage = 0
+
     adjusted_net = _distribute_additional_discount(doc, net_total, discount)
+    if doc.get("is_cash_or_non_trade_discount"):
+        display_net = max(0, flt(net_total) - flt(discount))
+        doc.total = net_total
+        doc.net_total = net_total
+        grand_total_val = max(0, flt(net_total) + total_taxes - flt(discount))
+    else:
+        display_net = adjusted_net
+        doc.total = adjusted_net
+        doc.net_total = adjusted_net
+        grand_total_val = max(0, flt(adjusted_net) + total_taxes)
 
-    if hasattr(doc, "total"):
-        doc.total = adjusted_net if not doc.get("is_cash_or_non_trade_discount") else net_total
-    if hasattr(doc, "net_total"):
-        doc.net_total = adjusted_net if not doc.get("is_cash_or_non_trade_discount") else net_total
-    if hasattr(doc, "base_total"):
-        doc.base_total = flt(doc.net_total) * conversion_rate
-    if hasattr(doc, "base_net_total"):
-        doc.base_net_total = flt(doc.net_total) * conversion_rate
-
-    # Custom Net Rate = line nets before additional discount (row view),
-    # Grand Total always reflects additional discount.
-    grand_total_val = max(0, flt(doc.net_total) + total_taxes - (discount if doc.get("is_cash_or_non_trade_discount") else 0))
-    if not doc.get("is_cash_or_non_trade_discount"):
-        # Discount already removed from item/net totals.
-        grand_total_val = max(0, flt(doc.net_total) + total_taxes)
-
-    base_grand_total_val = flt(grand_total_val) * conversion_rate
-    if base_total_taxes and abs(conversion_rate - 1) < 0.0000001:
-        # Prefer posted base taxes when same currency.
-        base_grand_total_val = max(
-            0,
-            flt(doc.base_net_total or doc.net_total) + base_total_taxes
-            - (flt(doc.base_discount_amount or 0) if doc.get("is_cash_or_non_trade_discount") else 0),
-        )
-        if not doc.get("is_cash_or_non_trade_discount"):
-            base_grand_total_val = flt(doc.base_net_total or doc.net_total) + base_total_taxes
-
-    if hasattr(doc, "grand_total"):
-        doc.grand_total = grand_total_val
-    if hasattr(doc, "base_grand_total"):
-        doc.base_grand_total = base_grand_total_val
-    if hasattr(doc, "rounded_total"):
-        doc.rounded_total = grand_total_val
-    if hasattr(doc, "base_rounded_total"):
-        doc.base_rounded_total = base_grand_total_val
-    if hasattr(doc, "outstanding_amount"):
-        doc.outstanding_amount = grand_total_val
+    doc.custom_net_rate = display_net
+    doc.base_total = flt(doc.net_total) * conversion_rate
+    doc.base_net_total = flt(doc.net_total) * conversion_rate
+    doc.grand_total = grand_total_val
+    doc.base_grand_total = flt(grand_total_val) * conversion_rate
+    doc.rounded_total = grand_total_val
+    doc.base_rounded_total = doc.base_grand_total
+    doc.outstanding_amount = grand_total_val
 
     try:
         from frappe.utils import money_in_words
@@ -1318,6 +1374,9 @@ def _apply_document_totals(doc, net_total):
     return grand_total_val
 
 def finalize_pi_amounts(doc, method):
+    # Restore Additional Discount stashed in before_validate, then apply once.
+    _restore_additional_discount(doc)
+
     before_doc = None if doc.is_new() else doc.get_doc_before_save()
     gross_total = 0
     discount_total = 0
@@ -1369,39 +1428,37 @@ def finalize_pi_amounts(doc, method):
         discount_total_value = min(max(0, discount_total_value), gross_total_value)
         computed_net = max(0, gross_total_value - discount_total_value)
 
-        # PR-linked rows without row discount: keep existing billed amount
-        # (PR-aligned). Document Additional Discount is applied later.
-        if item.get("pr_detail") and discount_total_value <= 0 and flt(item.amount or 0) > 0:
-            net_amount_value = flt(item.amount)
-            if not flt(item.custom_gross_total):
-                item.custom_gross_total = gross_total_value or net_amount_value
+        # Rebuild line amount BEFORE document Additional Discount.
+        # Do not reuse item.amount here — ERPNext / earlier hooks may already
+        # have deducted discount_amount once, which caused double discount.
+        if item.get("pr_detail") and discount_total_value <= 0:
+            net_amount_value = _get_pr_line_net(item.pr_detail) or computed_net or flt(item.amount)
+            item.custom_gross_total = gross_total_value or net_amount_value
             item.custom_discounted_amount = 0
             item.custom_net_amount = net_amount_value
+            item.amount = net_amount_value
         else:
             item.custom_gross_total = gross_total_value
             item.custom_discounted_amount = discount_total_value
             item.custom_net_amount = computed_net
             item.amount = computed_net
             net_amount_value = computed_net
-            if hasattr(item, "base_amount"):
-                item.base_amount = net_amount_value
-            if hasattr(item, "net_amount"):
-                item.net_amount = net_amount_value
-            if hasattr(item, "base_net_amount"):
-                item.base_net_amount = net_amount_value
 
-        gross_total += gross_total_value
-        discount_total += discount_total_value
+        if hasattr(item, "base_amount"):
+            item.base_amount = net_amount_value
+        if hasattr(item, "net_amount"):
+            item.net_amount = net_amount_value
+        if hasattr(item, "base_net_amount"):
+            item.base_net_amount = net_amount_value
+
+        gross_total += flt(item.custom_gross_total)
+        discount_total += flt(item.custom_discounted_amount)
         net_total += net_amount_value
 
     doc.custom_gross_rate = gross_total
-    # custom_discounted_* stay as ROW-level aggregates; document Additional Discount
-    # is applied separately via standard discount_amount / grand_total.
-    doc.custom_discounted_amount = discount_total
-    doc.custom_discounted_percentage = (discount_total / gross_total) * 100 if gross_total else 0
     doc.custom_net_rate = net_total
-
-    _apply_document_totals(doc, flt(net_total))
+    # Apply document Additional Discount once; also fills custom_discounted_* for print.
+    _apply_document_totals(doc, flt(net_total), row_discount_total=flt(discount_total))
 
 @frappe.whitelist()
 def make_purchase_invoice_custom(source_name, target_doc=None):

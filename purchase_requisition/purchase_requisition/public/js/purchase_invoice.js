@@ -23,20 +23,26 @@ function get_document_additional_discount(frm, net_total) {
     return Math.max(0, discount);
 }
 
-function apply_client_document_totals(frm, net_total) {
+function apply_client_document_totals(frm, net_total, row_discount_total) {
     const taxes = pi_flt(frm.doc.total_taxes_and_charges);
     const discount = get_document_additional_discount(frm, net_total);
     const grand = Math.max(0, net_total + taxes - discount);
+    const total_discount = pi_flt(row_discount_total) + discount;
+    const gross = pi_flt(frm.doc.custom_gross_rate);
 
-    frm.doc.total = net_total;
-    frm.doc.net_total = net_total;
-    frm.doc.base_total = net_total;
-    frm.doc.base_net_total = net_total;
+    frm.doc.total = Math.max(0, net_total - discount);
+    frm.doc.net_total = frm.doc.total;
+    frm.doc.base_total = frm.doc.total;
+    frm.doc.base_net_total = frm.doc.total;
     frm.doc.grand_total = grand;
     frm.doc.base_grand_total = grand;
     frm.doc.rounded_total = grand;
     frm.doc.base_rounded_total = grand;
     frm.doc.outstanding_amount = grand;
+    frm.doc.custom_net_rate = frm.doc.total;
+    // Print format uses these custom fields for Discounted Amount / %.
+    frm.doc.custom_discounted_amount = total_discount;
+    frm.doc.custom_discounted_percentage = gross > 0 ? (total_discount / gross) * 100 : 0;
     if (discount && !pi_flt(frm.doc.discount_amount)) {
         frm.doc.discount_amount = discount;
     }
@@ -240,7 +246,7 @@ function sync_mapped_pi_amounts(frm) {
         Math.abs(pi_flt(frm.doc.total) - net_total) > 0.01
         || Math.abs(pi_flt(frm.doc.grand_total) - expected_grand) > 0.01
     ) {
-        apply_client_document_totals(frm, net_total);
+        apply_client_document_totals(frm, net_total, discount_total);
         has_changes = true;
     }
 
@@ -378,8 +384,11 @@ frappe.ui.form.on('Purchase Invoice', {
         frm.set_value('custom_discounted_percentage', gross_total > 0 ? (discount_total / gross_total) * 100 : 0);
         frm.set_value('custom_net_rate', net_total);
 
-        apply_client_document_totals(frm, net_total);
-        frm.refresh_fields(['total', 'net_total', 'grand_total', 'rounded_total', 'outstanding_amount', 'discount_amount']);
+        apply_client_document_totals(frm, net_total, discount_total);
+        frm.refresh_fields([
+            'total', 'net_total', 'grand_total', 'rounded_total', 'outstanding_amount',
+            'discount_amount', 'custom_discounted_amount', 'custom_discounted_percentage', 'custom_net_rate'
+        ]);
         pi_log('recalculate_totals:end', {
             gross_total,
             discount_total,
