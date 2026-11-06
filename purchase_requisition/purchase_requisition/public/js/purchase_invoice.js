@@ -202,14 +202,33 @@ function sync_mapped_pi_amounts(frm) {
             amount: row.amount
         };
         normalize_row_display_rate(row);
-        row.custom_gross_total = pi_flt(row.custom_gross_total) || (pi_flt(row.qty) * get_editable_rate(row));
-        row.custom_discounted_amount = pi_flt(row.custom_discounted_amount);
-        row.custom_net_amount = pi_flt(row.custom_net_amount) || (pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount));
-
-        if (row.pr_detail && Math.abs(pi_flt(row.amount) - pi_flt(row.custom_net_amount)) > 0.01) {
-            row.amount = pi_flt(row.custom_net_amount);
+        const editable = get_editable_rate(row);
+        const expected_gross = pi_flt(row.qty) * editable;
+        if (editable && Math.abs(pi_flt(row.custom_gross_total) - expected_gross) > 0.01) {
+            row.custom_gross_total = expected_gross;
+            has_changes = true;
+        } else {
+            row.custom_gross_total = pi_flt(row.custom_gross_total) || expected_gross;
+        }
+        row.custom_discounted_amount = Math.min(
+            pi_flt(row.custom_discounted_amount),
+            pi_flt(row.custom_gross_total)
+        );
+        // Always keep Net = Gross - Discount (never leave stale PR net after rate edit).
+        const expected_net = Math.max(
+            0,
+            pi_flt(row.custom_gross_total) - pi_flt(row.custom_discounted_amount)
+        );
+        if (Math.abs(pi_flt(row.custom_net_amount) - expected_net) > 0.01) {
+            row.custom_net_amount = expected_net;
+            has_changes = true;
+        } else {
+            row.custom_net_amount = expected_net;
+        }
+        if (Math.abs(pi_flt(row.amount) - expected_net) > 0.01) {
+            row.amount = expected_net;
             if (Object.prototype.hasOwnProperty.call(row, 'base_amount')) {
-                row.base_amount = pi_flt(row.custom_net_amount);
+                row.base_amount = expected_net;
             }
             has_changes = true;
         }
@@ -318,6 +337,10 @@ frappe.ui.form.on('Purchase Invoice Item', {
     rate: function(frm, cdt, cdn) {
         const row = locals[cdt][cdn];
         row._po_rate_manually_edited = true;
+        // Visible Rate edits must drive committed rate + Net Total together.
+        if (Object.prototype.hasOwnProperty.call(row, 'custom_po_rate')) {
+            row.custom_po_rate = pi_flt(row.rate);
+        }
         if (row.qty && get_editable_rate(row)) {
             recalculate_row_from_qty_or_rate(row);
             frm.trigger('recalculate_totals');

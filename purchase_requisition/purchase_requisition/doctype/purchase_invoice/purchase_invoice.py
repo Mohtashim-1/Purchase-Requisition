@@ -1398,14 +1398,16 @@ def finalize_pi_amounts(doc, method):
                 po_detail = frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "purchase_order_item")
                 po_rate = flt(frappe.db.get_value("Purchase Order Item", po_detail, "rate") or 0) if po_detail else 0
                 pr_rate = flt(frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "rate") or 0)
-                if pr_rate:
-                    item.rate = pr_rate
-                    if hasattr(item, "base_rate"):
-                        item.base_rate = pr_rate
-                if hasattr(item, "price_list_rate") and not user_override:
-                    item.price_list_rate = flt(po_rate or visible_rate or pr_rate)
-                if hasattr(item, "custom_po_rate") and not user_override:
-                    item.custom_po_rate = flt(po_rate or visible_rate or pr_rate)
+                # Do not overwrite custom_po_rate / rate when user edited the row.
+                if not user_override:
+                    if pr_rate:
+                        item.rate = pr_rate
+                        if hasattr(item, "base_rate"):
+                            item.base_rate = pr_rate
+                    if hasattr(item, "price_list_rate"):
+                        item.price_list_rate = flt(po_rate or visible_rate or pr_rate)
+                    if hasattr(item, "custom_po_rate"):
+                        item.custom_po_rate = flt(po_rate or visible_rate or pr_rate)
             elif visible_rate:
                 item.rate = visible_rate
                 if hasattr(item, "base_rate"):
@@ -1416,7 +1418,10 @@ def finalize_pi_amounts(doc, method):
                     item.custom_po_rate = visible_rate
 
         editable_rate = flt(getattr(item, "custom_po_rate", 0) or item.rate or 0)
-        gross_total_value = flt(item.custom_gross_total) or (flt(item.qty) * editable_rate)
+        # Prefer qty * edited rate so a rate change always drives gross/net.
+        gross_total_value = flt(item.qty) * editable_rate if editable_rate else flt(item.custom_gross_total)
+        if not gross_total_value:
+            gross_total_value = flt(item.custom_gross_total)
         discount_pct_value = flt(item.custom_discount_percentage or 0)
         discount_amt_value = flt(item.custom_discounted_amount or 0)
 
@@ -1428,21 +1433,32 @@ def finalize_pi_amounts(doc, method):
         discount_total_value = min(max(0, discount_total_value), gross_total_value)
         computed_net = max(0, gross_total_value - discount_total_value)
 
-        # Rebuild line amount BEFORE document Additional Discount.
-        # Do not reuse item.amount here — ERPNext / earlier hooks may already
-        # have deducted discount_amount once, which caused double discount.
-        if item.get("pr_detail") and discount_total_value <= 0:
-            net_amount_value = _get_pr_line_net(item.pr_detail) or computed_net or flt(item.amount)
-            item.custom_gross_total = gross_total_value or net_amount_value
-            item.custom_discounted_amount = 0
-            item.custom_net_amount = net_amount_value
-            item.amount = net_amount_value
+        # PI is source of truth: net always follows gross - row discount.
+        # Only keep unedited PR net when user has not changed rate/discount/qty
+        # and computed net still matches PR (mapped default row).
+        pr_net = _get_pr_line_net(item.pr_detail) if item.get("pr_detail") else 0
+        if (
+            item.get("pr_detail")
+            and discount_total_value <= 0
+            and not user_override
+            and pr_net
+            and abs(computed_net - pr_net) <= 0.01
+        ):
+            net_amount_value = pr_net
         else:
-            item.custom_gross_total = gross_total_value
-            item.custom_discounted_amount = discount_total_value
-            item.custom_net_amount = computed_net
-            item.amount = computed_net
             net_amount_value = computed_net
+
+        item.custom_gross_total = gross_total_value or net_amount_value
+        item.custom_discounted_amount = discount_total_value
+        item.custom_net_amount = net_amount_value
+        item.amount = net_amount_value
+
+        # Keep transactional rate aligned with billed net so ERPNext qty*rate
+        # does not fight custom totals after a rate edit.
+        if flt(item.qty):
+            item.rate = flt(net_amount_value) / flt(item.qty)
+            if hasattr(item, "base_rate"):
+                item.base_rate = item.rate
 
         if hasattr(item, "base_amount"):
             item.base_amount = net_amount_value
